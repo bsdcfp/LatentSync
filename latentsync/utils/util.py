@@ -13,25 +13,26 @@
 # limitations under the License.
 
 import os
+import imageio
 import numpy as np
 import json
 from typing import Union
-from pathlib import Path
 import matplotlib.pyplot as plt
-import imageio
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
 import torch.distributed as dist
 from torchvision import transforms
 
+from tqdm import tqdm
 from einops import rearrange
 import cv2
 from decord import AudioReader, VideoReader
 import shutil
 import subprocess
-
+import time
 
 # Machine epsilon for a float32 (single precision)
 eps = np.finfo(np.float32).eps
@@ -43,7 +44,31 @@ def read_json(filepath: str):
     return json_dict
 
 
-def read_video(video_path: str, change_fps=True, use_decord=True):
+# def read_video(video_path: str, change_fps=True, use_decord=True):
+#     s1_time = time.time()
+#     if change_fps:
+#         temp_dir = "temp"
+#         if os.path.exists(temp_dir):
+#             shutil.rmtree(temp_dir)
+#         os.makedirs(temp_dir, exist_ok=True)
+#         command = (
+#             f"ffmpeg -loglevel error -y -nostdin -i {video_path} -r 25 -crf 18 {os.path.join(temp_dir, 'video.mp4')}"
+#         )
+#         subprocess.run(command, shell=True)
+#         target_video_path = os.path.join(temp_dir, "video.mp4")
+#     else:
+#         target_video_path = video_path
+#     print(f"s1_time = {time.time() - s1_time}")
+#     if use_decord:
+#         return read_video_decord(target_video_path)
+#     else:
+#         s1_2_time = time.time()
+#         result = read_video_cv2(target_video_path)
+#         print(f"s1_2_time = {time.time() - s1_2_time}")
+#         print(f"s1_all_time = {time.time() - s1_time}")
+#         return result
+
+def read_video(video_path: str, change_fps=True, use_decord=True, gen_frame_num=-1, start_index=0):
     if change_fps:
         temp_dir = "temp"
         if os.path.exists(temp_dir):
@@ -60,7 +85,96 @@ def read_video(video_path: str, change_fps=True, use_decord=True):
     if use_decord:
         return read_video_decord(target_video_path)
     else:
-        return read_video_cv2(target_video_path)
+        if gen_frame_num == -1:
+            return read_video_cv2(target_video_path)
+        else:
+            return read_video_cv2_with_specific_frames(target_video_path, gen_frame_num=gen_frame_num, start_index=start_index)
+
+
+def read_video_simple(video_path: str):
+
+    cap = cv2.VideoCapture(video_path)
+
+    # Check if the video was opened successfully
+    if not cap.isOpened():
+        print("Error: Could not open video.")
+        return {
+            "frames": np.array([]),
+            "frame_num": 0,
+            "fps": 0,
+            "height": 0,
+            "width": 0,
+            "duration": 0
+        }
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    frames = []
+
+    while True:
+        # Read a frame
+        ret, frame = cap.read()
+
+        # If frame is read correctly ret is True
+        if not ret:
+            break
+
+        # Convert BGR to RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        frames.append(frame_rgb)
+
+    # Release the video capture object
+    cap.release()
+
+    # 构建返回字典
+    frames_array = np.array(frames)
+    frame_num = len(frames)
+    duration = frame_num / fps if fps > 0 else 0
+    
+    return {
+        "frames": frames_array,
+        "frame_num": frame_num,
+        "fps": fps,
+        "height": height,
+        "width": width,
+        "duration": duration
+    }
+
+
+
+
+
+
+def read_video_v2(video_path: str, change_fps=True, gen_frame_num=-1, start_index=0, use_decord=True):
+    if change_fps:
+        temp_dir = "temp"
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        os.makedirs(temp_dir, exist_ok=True)
+        command = (
+            f"ffmpeg -loglevel error -y -nostdin -i {video_path} -r 25 -crf 18 {os.path.join(temp_dir, 'video.mp4')}"
+        )
+        subprocess.run(command, shell=True)
+        target_video_path = os.path.join(temp_dir, "video.mp4")
+    else:
+        target_video_path = video_path
+
+    if use_decord:
+        return read_video_decord_v2(target_video_path, gen_frame_num=gen_frame_num, start_index=start_index)
+    else:
+        return read_video_cv2_v2(target_video_path, gen_frame_num=gen_frame_num, start_index=start_index)
+
+
+# def read_video_decord(video_path: str):
+#     s3_time= time.time()
+#     vr = VideoReader(video_path)
+#     video_frames = vr[:].asnumpy()
+#     vr.seek(0)
+#     print(f"s3_all_time = {time.time() - s3_time}")
+#     return video_frames
 
 
 def read_video_decord(video_path: str):
@@ -68,6 +182,44 @@ def read_video_decord(video_path: str):
     video_frames = vr[:].asnumpy()
     vr.seek(0)
     return video_frames
+
+def read_video_decord_v2(video_path: str, gen_frame_num=-1, start_index=0):
+    vr = VideoReader(video_path)
+    video_frames = vr[:].asnumpy()
+    vr.seek(0)
+    return video_frames
+
+
+# def read_video_cv2(video_path: str):
+#     s2_time=time.time()
+#     # Open the video file
+#     cap = cv2.VideoCapture(video_path)
+
+#     # Check if the video was opened successfully
+#     if not cap.isOpened():
+#         print("Error: Could not open video.")
+#         return np.array([])
+
+#     frames = []
+
+#     while True:
+#         # Read a frame
+#         ret, frame = cap.read()
+
+#         # If frame is read correctly ret is True
+#         if not ret:
+#             break
+
+#         # Convert BGR to RGB
+#         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+#         frames.append(frame_rgb)
+
+#     # Release the video capture object
+#     cap.release()
+#     result = np.array(frames)
+#     print(f"s2_time = {time.time() - s2_time}")
+#     return result
 
 
 def read_video_cv2(video_path: str):
@@ -100,6 +252,87 @@ def read_video_cv2(video_path: str):
     return np.array(frames)
 
 
+def read_video_cv2_with_specific_frames(video_path: str, gen_frame_num=-1, start_index=0):
+    # Open the video file
+    cap = cv2.VideoCapture(video_path)
+
+    # Check if the video was opened successfully
+    if not cap.isOpened():
+        print("Error: Could not open video.")
+        return np.array([])
+
+    # frames = []
+
+    # total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # # 如果gen_frame_num为-1，则读取所有帧
+    # if gen_frame_num == -1:
+    #     gen_frame_num = total_frames
+
+    # 读取所有原始视频帧
+    all_frames = []
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        all_frames.append(frame_rgb)
+    
+    cap.release()
+
+    all_frame_number = len(all_frames)  # 相当于avatar["frame_num"]
+    # 确保我们读取到了帧
+    if all_frame_number == 0:
+        return np.array([])
+
+    result_frames = []
+    
+    # 根据循环逻辑生成所需帧
+    for i in range(gen_frame_num):
+        frame_index = start_index + i
+        # 实现循环逻辑：正序，倒序，正序，倒序...
+        idx = frame_index % all_frame_number
+        idx = idx if frame_index // all_frame_number % 2 == 0 else all_frame_number - idx - 1
+        
+        # 添加对应帧到结果
+        result_frames.append(all_frames[idx])
+    
+    return np.array(result_frames), all_frame_number
+
+    # # # 设置起始帧位置
+    # # cap.set(cv2.CAP_PROP_POS_FRAMES, start_index)
+    
+    # # 读取指定数量的帧
+    # for i in range(gen_frame_num):
+    #     # 读取一帧
+    #     ret, frame = cap.read()
+        
+    #     # 如果帧读取正确，ret为True
+    #     if not ret:
+    #         break
+            
+    #     # 将BGR转换为RGB
+    #     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    #     frames.append(frame_rgb)
+
+    # # while True:
+    # #     # Read a frame
+    # #     ret, frame = cap.read()
+
+    # #     # If frame is read correctly ret is True
+    # #     if not ret:
+    # #         break
+
+    # #     # Convert BGR to RGB
+    # #     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # #     frames.append(frame_rgb)
+
+    # # Release the video capture object
+    # cap.release()
+
+    # return np.array(frames)
+
+
 def read_audio(audio_path: str, audio_sample_rate: int = 16000):
     if audio_path is None:
         raise ValueError("Audio path is required.")
@@ -113,19 +346,6 @@ def read_audio(audio_path: str, audio_sample_rate: int = 16000):
 
 
 def write_video(video_output_path: str, video_frames: np.ndarray, fps: int):
-    with imageio.get_writer(
-        video_output_path,
-        fps=fps,
-        codec="libx264",
-        macro_block_size=None,
-        ffmpeg_params=["-crf", "13"],
-        ffmpeg_log_level="error",
-    ) as writer:
-        for video_frame in video_frames:
-            writer.append_data(video_frame)
-
-
-def write_video_cv2(video_output_path: str, video_frames: np.ndarray, fps: int):
     height, width = video_frames[0].shape[:2]
     out = cv2.VideoWriter(video_output_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
     # out = cv2.VideoWriter(video_output_path, cv2.VideoWriter_fourcc(*"vp09"), fps, (width, height))
@@ -158,6 +378,16 @@ def zero_rank_log(logger, message: str):
         logger.info(message)
 
 
+def make_audio_window(audio_embeddings: torch.Tensor, window_size: int):
+    audio_window = []
+    end_idx = audio_embeddings.shape[1] - window_size + 1
+    for i in range(end_idx):
+        audio_window.append(audio_embeddings[:, i : i + window_size, :])
+    audio_window = torch.stack(audio_window)
+    audio_window = rearrange(audio_window, "f b w d -> b f w d")
+    return audio_window
+
+
 def check_video_fps(video_path: str):
     cam = cv2.VideoCapture(video_path)
     fps = cam.get(cv2.CAP_PROP_FPS)
@@ -165,13 +395,69 @@ def check_video_fps(video_path: str):
         raise ValueError(f"Video FPS is not 25, it is {fps}. Please convert the video to 25 FPS.")
 
 
-def one_step_sampling(ddim_scheduler, pred_noise, timesteps, x_t):
+def tailor_tensor_to_length(tensor: torch.Tensor, length: int):
+    if len(tensor) == length:
+        return tensor
+    elif len(tensor) > length:
+        return tensor[:length]
+    else:
+        return torch.cat([tensor, tensor[-1].repeat(length - len(tensor))])
+
+
+def save_videos_grid(videos: torch.Tensor, path: str, rescale=False, n_rows=6, fps=8):
+    videos = rearrange(videos, "b c f h w -> f b c h w")
+    outputs = []
+    for x in videos:
+        x = torchvision.utils.make_grid(x, nrow=n_rows)
+        x = x.transpose(0, 1).transpose(1, 2).squeeze(-1)
+        if rescale:
+            x = (x + 1.0) / 2.0  # -1,1 -> 0,1
+        x = (x * 255).numpy().astype(np.uint8)
+        outputs.append(x)
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    imageio.mimsave(path, outputs, fps=fps)
+
+
+def interpolate_features(features: torch.Tensor, output_len: int) -> torch.Tensor:
+    features = features.cpu().numpy()
+    input_len, num_features = features.shape
+
+    input_timesteps = np.linspace(0, 10, input_len)
+    output_timesteps = np.linspace(0, 10, output_len)
+    output_features = np.zeros((output_len, num_features))
+    for feat in range(num_features):
+        output_features[:, feat] = np.interp(output_timesteps, input_timesteps, features[:, feat])
+    return torch.from_numpy(output_features)
+
+
+# DDIM Inversion
+@torch.no_grad()
+def init_prompt(prompt, pipeline):
+    uncond_input = pipeline.tokenizer(
+        [""], padding="max_length", max_length=pipeline.tokenizer.model_max_length, return_tensors="pt"
+    )
+    uncond_embeddings = pipeline.text_encoder(uncond_input.input_ids.to(pipeline.device))[0]
+    text_input = pipeline.tokenizer(
+        [prompt],
+        padding="max_length",
+        max_length=pipeline.tokenizer.model_max_length,
+        truncation=True,
+        return_tensors="pt",
+    )
+    text_embeddings = pipeline.text_encoder(text_input.input_ids.to(pipeline.device))[0]
+    context = torch.cat([uncond_embeddings, text_embeddings])
+
+    return context
+
+
+def reversed_forward(ddim_scheduler, pred_noise, timesteps, x_t):
     # Compute alphas, betas
-    alpha_prod_t = ddim_scheduler.alphas_cumprod[timesteps].to(dtype=pred_noise.dtype)
+    alpha_prod_t = ddim_scheduler.alphas_cumprod[timesteps]
     beta_prod_t = 1 - alpha_prod_t
 
     # 3. compute predicted original sample from predicted noise also called
-    # "predicted x_0" of formula (12) from https://arxiv.org/abs/2010.02502
+    # "predicted x_0" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
     if ddim_scheduler.config.prediction_type == "epsilon":
         beta_prod_t = beta_prod_t[:, None, None, None, None]
         alpha_prod_t = alpha_prod_t[:, None, None, None, None]
@@ -183,6 +469,50 @@ def one_step_sampling(ddim_scheduler, pred_noise, timesteps, x_t):
     if ddim_scheduler.config.clip_sample:
         pred_original_sample = torch.clamp(pred_original_sample, -1, 1)
     return pred_original_sample
+
+
+def next_step(
+    model_output: Union[torch.FloatTensor, np.ndarray],
+    timestep: int,
+    sample: Union[torch.FloatTensor, np.ndarray],
+    ddim_scheduler,
+):
+    timestep, next_timestep = (
+        min(timestep - ddim_scheduler.config.num_train_timesteps // ddim_scheduler.num_inference_steps, 999),
+        timestep,
+    )
+    alpha_prod_t = ddim_scheduler.alphas_cumprod[timestep] if timestep >= 0 else ddim_scheduler.final_alpha_cumprod
+    alpha_prod_t_next = ddim_scheduler.alphas_cumprod[next_timestep]
+    beta_prod_t = 1 - alpha_prod_t
+    next_original_sample = (sample - beta_prod_t**0.5 * model_output) / alpha_prod_t**0.5
+    next_sample_direction = (1 - alpha_prod_t_next) ** 0.5 * model_output
+    next_sample = alpha_prod_t_next**0.5 * next_original_sample + next_sample_direction
+    return next_sample
+
+
+def get_noise_pred_single(latents, t, context, unet):
+    noise_pred = unet(latents, t, encoder_hidden_states=context)["sample"]
+    return noise_pred
+
+
+@torch.no_grad()
+def ddim_loop(pipeline, ddim_scheduler, latent, num_inv_steps, prompt):
+    context = init_prompt(prompt, pipeline)
+    uncond_embeddings, cond_embeddings = context.chunk(2)
+    all_latent = [latent]
+    latent = latent.clone().detach()
+    for i in tqdm(range(num_inv_steps)):
+        t = ddim_scheduler.timesteps[len(ddim_scheduler.timesteps) - i - 1]
+        noise_pred = get_noise_pred_single(latent, t, cond_embeddings, pipeline.unet)
+        latent = next_step(noise_pred, t, latent, ddim_scheduler)
+        all_latent.append(latent)
+    return all_latent
+
+
+@torch.no_grad()
+def ddim_inversion(pipeline, ddim_scheduler, video_latent, num_inv_steps, prompt=""):
+    ddim_latents = ddim_loop(pipeline, ddim_scheduler, video_latent, num_inv_steps, prompt)
+    return ddim_latents
 
 
 def plot_loss_chart(save_path: str, *args):
@@ -272,18 +602,3 @@ def check_ffmpeg_installed():
     result = subprocess.run("ffmpeg -version", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     if not result.returncode == 0:
         raise FileNotFoundError("ffmpeg not found, please install it by:\n    $ conda install -c conda-forge ffmpeg")
-
-
-def check_model_and_download(ckpt_path: str, huggingface_model_id: str = "ByteDance/LatentSync-1.5"):
-    if not os.path.exists(ckpt_path):
-        ckpt_path_obj = Path(ckpt_path)
-        download_cmd = f"huggingface-cli download {huggingface_model_id} {Path(*ckpt_path_obj.parts[1:])} --local-dir {Path(ckpt_path_obj.parts[0])}"
-        subprocess.run(download_cmd, shell=True)
-
-
-class dummy_context:
-    def __enter__(self):
-        pass
-
-    def __exit__(self, *args):
-        pass

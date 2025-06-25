@@ -1,0 +1,679 @@
+📝 日志文件已启用: /home/work/hy_01/mmuplt-avatarv3/test_case/0610/log.log
+============================================================
+Input video path: /home/work/hy_01/mmuplt-avatarv3/test_case/sg-11110113-6kio2-m70ast5zgv7f6d_4x.mp4
+Input audio path: /home/work/hy_01/mmuplt-avatarv3/test_case/beauty_v2.MP3
+Loaded checkpoint path: /home/work/hy_01/weights/latentsync/latentsync_unet.pt
+Xformers is available, enabling xformers memory efficient attention
+Initial seed: 1247
+正在启用DiyCache...
+DiyCache已启用 - 第一步偏移: 1, 最后一步偏移: 4
+DiyCache已启用:
+  - 第一步偏移: 1
+  - 最后一步偏移: 4
+  - 推理步数: 20
+  - 残差更新模式: native
+  - 统计模式: 未启用
+============================================================
+开始执行视频生成pipeline...
+🔄 加载缓存特征: /home/work/hy_01/features/video_features_880942ae6bdc66b6b4b8ce5a905a5517.pkl
+🎬 现场读取原始视频帧...
+✅ 成功加载缓存特征，faces形状: torch.Size([516, 3, 256, 256])
+音频时长: 186.83秒, 需要处理: 4670帧
+根据音频长度，将处理视频的前512帧
+video in 25 FPS, audio idx in 50FPS
+Doing inference...:   0%|          | 0/32 [00:00<?, ?it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:11,  1.63it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 35.46it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 27.02it/s]
+Doing inference...:   3%|▎         | 1/32 [00:02<01:04,  2.08s/it]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:03,  6.33it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 83.95it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 70.86it/s]
+Doing inference...:   6%|▋         | 2/32 [00:02<00:31,  1.04s/it]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.45it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.11it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.88it/s]
+Doing inference...:   9%|▉         | 3/32 [00:02<00:22,  1.32it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.45it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.71it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.62it/s]
+Doing inference...:  12%|█▎        | 4/32 [00:03<00:17,  1.60it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.46it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.97it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.82it/s]
+Doing inference...:  16%|█▌        | 5/32 [00:03<00:14,  1.81it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.46it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.93it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.78it/s]
+Doing inference...:  19%|█▉        | 6/32 [00:04<00:13,  1.96it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.01it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.77it/s]
+Doing inference...:  22%|██▏       | 7/32 [00:04<00:12,  2.08it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.91it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.70it/s]
+Doing inference...:  25%|██▌       | 8/32 [00:04<00:11,  2.16it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.45it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.22it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.97it/s]
+Doing inference...:  28%|██▊       | 9/32 [00:05<00:10,  2.22it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.45it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.30it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 72.03it/s]
+Doing inference...:  31%|███▏      | 10/32 [00:05<00:09,  2.26it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.44it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.10it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.88it/s]
+Doing inference...:  34%|███▍      | 11/32 [00:06<00:09,  2.29it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.44it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.14it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.89it/s]
+Doing inference...:  38%|███▊      | 12/32 [00:06<00:08,  2.31it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.07it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.81it/s]
+Doing inference...:  41%|████      | 13/32 [00:07<00:08,  2.33it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.44it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.45it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.40it/s]
+Doing inference...:  44%|████▍     | 14/32 [00:07<00:07,  2.33it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.45it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.23it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.27it/s]
+Doing inference...:  47%|████▋     | 15/32 [00:07<00:07,  2.34it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.44it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.09it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.86it/s]
+Doing inference...:  50%|█████     | 16/32 [00:08<00:06,  2.34it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.04it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.80it/s]
+Doing inference...:  53%|█████▎    | 17/32 [00:08<00:06,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.95it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.72it/s]
+Doing inference...:  56%|█████▋    | 18/32 [00:09<00:05,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.43it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.97it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.77it/s]
+Doing inference...:  59%|█████▉    | 19/32 [00:09<00:05,  2.36it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.44it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.00it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.79it/s]
+Doing inference...:  62%|██████▎   | 20/32 [00:10<00:05,  2.36it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.83it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.65it/s]
+Doing inference...:  66%|██████▌   | 21/32 [00:10<00:04,  2.36it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.40it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.52it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.39it/s]
+Doing inference...:  69%|██████▉   | 22/32 [00:10<00:04,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.44it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 85.18it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.93it/s]
+Doing inference...:  72%|███████▏  | 23/32 [00:11<00:03,  2.36it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.86it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.66it/s]
+Doing inference...:  75%|███████▌  | 24/32 [00:11<00:03,  2.36it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.43it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.18it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.20it/s]
+Doing inference...:  78%|███████▊  | 25/32 [00:12<00:02,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.39it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.76it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.53it/s]
+Doing inference...:  81%|████████▏ | 26/32 [00:12<00:02,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.96it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.73it/s]
+Doing inference...:  84%|████████▍ | 27/32 [00:12<00:02,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.77it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.61it/s]
+Doing inference...:  88%|████████▊ | 28/32 [00:13<00:01,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.40it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.79it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.59it/s]
+Doing inference...:  91%|█████████ | 29/32 [00:13<00:01,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.40it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.45it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.33it/s]
+Doing inference...:  94%|█████████▍| 30/32 [00:14<00:00,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.41it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.94it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.71it/s]
+Doing inference...:  97%|█████████▋| 31/32 [00:14<00:00,  2.35it/s]
+Sample frames: 16:   0%|          | 0/20 [00:00<?, ?it/s][A
+Sample frames: 16:   5%|▌         | 1/20 [00:00<00:02,  6.42it/s][A
+Sample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 84.78it/s][ASample frames: 16: 100%|██████████| 20/20 [00:00<00:00, 71.61it/s]
+Doing inference...: 100%|██████████| 32/32 [00:15<00:00,  2.35it/s]Doing inference...: 100%|██████████| 32/32 [00:15<00:00,  2.12it/s]
+🎯 所有批次统计: 共32个批次, 总去噪耗时=9.403s, 总UNet推理耗时=8.136s, 平均去噪耗时=0.294s, 平均UNet推理耗时=0.013s
+Restoring 512 faces...
+  0%|          | 0/512 [00:00<?, ?it/s]  0%|          | 1/512 [00:00<01:24,  6.07it/s]  1%|          | 6/512 [00:00<00:19, 25.80it/s]  2%|▏         | 12/512 [00:00<00:13, 37.32it/s]  4%|▎         | 18/512 [00:00<00:11, 43.35it/s]  5%|▍         | 24/512 [00:00<00:10, 46.87it/s]  6%|▌         | 30/512 [00:00<00:09, 50.61it/s]  7%|▋         | 36/512 [00:00<00:08, 52.98it/s]  8%|▊         | 42/512 [00:00<00:08, 53.30it/s] 10%|▉         | 49/512 [00:01<00:08, 55.71it/s] 11%|█         | 55/512 [00:01<00:08, 56.49it/s] 12%|█▏        | 61/512 [00:01<00:07, 57.31it/s] 13%|█▎        | 67/512 [00:01<00:07, 57.34it/s] 14%|█▍        | 73/512 [00:01<00:07, 57.40it/s] 16%|█▌        | 80/512 [00:01<00:07, 57.98it/s] 17%|█▋        | 87/512 [00:01<00:07, 59.37it/s] 18%|█▊        | 94/512 [00:01<00:06, 59.77it/s] 20%|█▉        | 100/512 [00:01<00:06, 59.36it/s] 21%|██        | 107/512 [00:02<00:06, 59.71it/s] 22%|██▏       | 113/512 [00:02<00:06, 59.09it/s] 23%|██▎       | 119/512 [00:02<00:06, 59.28it/s] 24%|██▍       | 125/512 [00:02<00:06, 56.59it/s] 26%|██▌       | 131/512 [00:02<00:06, 56.46it/s] 27%|██▋       | 137/512 [00:02<00:06, 55.00it/s] 28%|██▊       | 143/512 [00:02<00:06, 55.04it/s] 29%|██▉       | 149/512 [00:02<00:06, 55.74it/s] 30%|███       | 156/512 [00:02<00:06, 57.18it/s] 32%|███▏      | 162/512 [00:03<00:06, 55.79it/s] 33%|███▎      | 168/512 [00:03<00:06, 56.93it/s] 34%|███▍      | 174/512 [00:03<00:05, 57.57it/s] 35%|███▌      | 180/512 [00:03<00:05, 58.18it/s] 36%|███▋      | 186/512 [00:03<00:05, 57.15it/s] 38%|███▊      | 193/512 [00:03<00:05, 58.65it/s] 39%|███▉      | 199/512 [00:03<00:05, 58.62it/s] 40%|████      | 206/512 [00:03<00:05, 59.20it/s] 42%|████▏     | 213/512 [00:03<00:05, 59.79it/s] 43%|████▎     | 219/512 [00:03<00:04, 59.62it/s] 44%|████▍     | 225/512 [00:04<00:04, 59.30it/s] 45%|████▌     | 231/512 [00:04<00:04, 59.07it/s] 46%|████▋     | 237/512 [00:04<00:04, 59.15it/s] 47%|████▋     | 243/512 [00:04<00:04, 58.83it/s] 49%|████▊     | 249/512 [00:04<00:04, 58.23it/s] 50%|████▉     | 255/512 [00:04<00:04, 57.80it/s] 51%|█████     | 261/512 [00:04<00:04, 57.20it/s] 52%|█████▏    | 267/512 [00:04<00:04, 56.23it/s] 53%|█████▎    | 273/512 [00:04<00:04, 56.33it/s] 54%|█████▍    | 279/512 [00:05<00:04, 56.42it/s] 56%|█████▌    | 285/512 [00:05<00:04, 56.73it/s] 57%|█████▋    | 291/512 [00:05<00:03, 56.77it/s] 58%|█████▊    | 297/512 [00:05<00:03, 56.87it/s] 59%|█████▉    | 303/512 [00:05<00:03, 57.10it/s] 60%|██████    | 309/512 [00:05<00:03, 57.57it/s] 62%|██████▏   | 316/512 [00:05<00:03, 58.40it/s] 63%|██████▎   | 323/512 [00:05<00:03, 59.04it/s] 64%|██████▍   | 329/512 [00:05<00:03, 59.26it/s] 65%|██████▌   | 335/512 [00:05<00:02, 59.22it/s] 67%|██████▋   | 342/512 [00:06<00:02, 59.58it/s] 68%|██████▊   | 348/512 [00:06<00:02, 59.65it/s] 69%|██████▉   | 354/512 [00:06<00:02, 59.69it/s] 70%|███████   | 360/512 [00:06<00:02, 59.71it/s] 72%|███████▏  | 367/512 [00:06<00:02, 59.97it/s] 73%|███████▎  | 373/512 [00:06<00:02, 59.74it/s] 74%|███████▍  | 379/512 [00:06<00:02, 59.22it/s] 75%|███████▌  | 385/512 [00:06<00:02, 58.86it/s] 76%|███████▋  | 391/512 [00:06<00:02, 58.12it/s] 78%|███████▊  | 397/512 [00:07<00:01, 57.60it/s] 79%|███████▊  | 403/512 [00:07<00:01, 57.75it/s] 80%|███████▉  | 409/512 [00:07<00:01, 57.69it/s] 81%|████████  | 415/512 [00:07<00:01, 57.59it/s] 82%|████████▏ | 421/512 [00:07<00:01, 57.63it/s] 83%|████████▎ | 427/512 [00:07<00:01, 57.42it/s] 85%|████████▍ | 433/512 [00:07<00:01, 57.25it/s] 86%|████████▌ | 439/512 [00:07<00:01, 57.36it/s] 87%|████████▋ | 445/512 [00:07<00:01, 57.69it/s] 88%|████████▊ | 451/512 [00:07<00:01, 57.64it/s] 89%|████████▉ | 457/512 [00:08<00:00, 57.89it/s] 90%|█████████ | 463/512 [00:08<00:00, 57.96it/s] 92%|█████████▏| 469/512 [00:08<00:00, 58.02it/s] 93%|█████████▎| 475/512 [00:08<00:00, 57.97it/s] 94%|█████████▍| 481/512 [00:08<00:00, 58.12it/s] 95%|█████████▌| 487/512 [00:08<00:00, 58.21it/s] 96%|█████████▋| 493/512 [00:08<00:00, 58.24it/s] 97%|█████████▋| 499/512 [00:08<00:00, 57.13it/s] 99%|█████████▊| 505/512 [00:08<00:00, 57.04it/s]100%|█████████▉| 511/512 [00:09<00:00, 56.81it/s]100%|██████████| 512/512 [00:09<00:00, 56.74it/s]
+============================================================
+🎉 视频生成完成！
+📊 性能统计:
+  - 总执行时间: 36.90 秒
+  - 推理步数: 20
+  - DeepCache状态: 未启用
+  - DiyCache状态: 已启用 )
+  - DiyCache状态: 未启用
+  - 输出视频: /home/work/hy_01/mmuplt-avatarv3/test_case/0610/out_t2.mp4
+============================================================
+📝 日志已保存到: /home/work/hy_01/mmuplt-avatarv3/test_case/0610/log.log
+Wrote profile results to inference_dicache_0604.py.lprof
+Timer unit: 1e-06 s
+
+Total time: 36.7301 s
+File: /home/work/hy_01/mmuplt-avatarv3/latent_sync/latentsync/pipelines/lipsync_pipeline_teacache_0603.py
+Function: __call__ at line 457
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   457                                               @torch.no_grad()
+   458                                               @profile  # line_profiler 装饰器
+   459                                               def __call__(
+   460                                                   self,
+   461                                                   video_path: str,
+   462                                                   audio_path: str,
+   463                                                   video_out_path: str,
+   464                                                   video_mask_path: str = None,
+   465                                                   num_frames: int = 16,
+   466                                                   video_fps: int = 25,
+   467                                                   audio_sample_rate: int = 16000,
+   468                                                   height: Optional[int] = None,
+   469                                                   width: Optional[int] = None,
+   470                                                   num_inference_steps: int = 20,
+   471                                                   guidance_scale: float = 1.5,
+   472                                                   weight_dtype: Optional[torch.dtype] = torch.float16,
+   473                                                   eta: float = 0.0,
+   474                                                   mask: str = "fix_mask",
+   475                                                   generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
+   476                                                   callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
+   477                                                   callback_steps: Optional[int] = 1,
+   478                                                   high_rs_faces=False,
+   479                                                   output_orig_face_video=True,
+   480                                                   output_small_face_video=True,
+   481                                                   limit_video_frames=True,
+   482                                                   **kwargs,
+   483                                               ):
+   484         1          4.4      4.4      0.0          is_train = self.unet.training
+   485         1       4298.3   4298.3      0.0          self.unet.eval()
+   486                                           
+   487                                                   # check_ffmpeg_installed()
+   488                                           
+   489                                                   # 0. Define call parameters
+   490         1          2.7      2.7      0.0          batch_size = 1
+   491         1        451.5    451.5      0.0          device = self._execution_device
+   492                                                   # self.image_processor = ImageProcessor(height, mask=mask, device="cuda")
+   493         1          4.5      4.5      0.0          self.set_progress_bar_config(desc=f"Sample frames: {num_frames}")
+   494                                                   # faces, original_video_frames, boxes, affine_matrices = self.affine_transform_video(video_path)
+   495                                                   # 生成缓存文件名，基于video_path的哈希值
+   496         1         36.8     36.8      0.0          video_hash = hashlib.md5(video_path.encode()).hexdigest()
+   497         1          0.4      0.4      0.0          cache_dir = "/home/work/hy_01/features"
+   498         1        427.1    427.1      0.0          os.makedirs(cache_dir, exist_ok=True)
+   499         1          6.5      6.5      0.0          cache_file = os.path.join(cache_dir, f"video_features_{video_hash}.pkl")
+   500                                                   
+   501                                                   # 检查是否需要缓存特征
+   502         1        333.3    333.3      0.0          if os.path.exists(cache_file):
+   503         1        409.0    409.0      0.0              print(f"🔄 加载缓存特征: {cache_file}")
+   504         2       7943.7   3971.8      0.0              with gzip.open(cache_file, 'rb') as f:
+   505         1    1615572.9    2e+06      4.4                  cached_data = pickle.load(f)
+   506                                                           # 加载时先获取CPU tensor，然后转换到目标设备和精度
+   507         1          2.0      2.0      0.0                  faces = cached_data['faces']
+   508         1          8.2      8.2      0.0                  if torch.is_tensor(faces):
+   509         1      27877.6  27877.6      0.1                      faces = faces.to(device).float()  # 转回float32用于推理
+   510         1          3.6      3.6      0.0                  boxes = cached_data['boxes']
+   511         1          2.8      2.8      0.0                  affine_matrices = cached_data['affine_matrices']
+   512                                                           
+   513                                                           # 现场读取original_video_frames，不从缓存加载
+   514         1        540.4    540.4      0.0                  print("🎬 现场读取原始视频帧...")
+   515         1    3537207.6    4e+06      9.6                  original_video_frames = read_video(video_path, use_decord=False)
+   516                                                           # 确保帧数一致，取缓存中faces的帧数
+   517         1        118.0    118.0      0.0                  original_video_frames = original_video_frames[:len(faces)]
+   518                                                           
+   519         1        476.4    476.4      0.0              print(f"✅ 成功加载缓存特征，faces形状: {faces.shape}")
+   520                                                   else:
+   521                                                       print(f"🎬 首次处理视频，执行特征提取...")
+   522                                                       faces, original_video_frames, boxes, affine_matrices = self.affine_transform_video(video_path)
+   523                                                       print(f"💾 保存特征到缓存: {cache_file}")
+   524                                                       
+   525                                                       # 只保存核心特征，不保存original_video_frames
+   526                                                       cache_data = {
+   527                                                           'faces': faces.cpu().half() if torch.is_tensor(faces) else faces,  # float32 -> float16节省空间
+   528                                                           'boxes': boxes,
+   529                                                           'affine_matrices': affine_matrices,
+   530                                                           'video_path': video_path,  # 记录原视频路径以供验证
+   531                                                           'num_frames': len(faces)  # 记录帧数
+   532                                                       }
+   533                                                       
+   534                                                       # 使用gzip压缩保存
+   535                                                       with gzip.open(cache_file, 'wb', compresslevel=6) as f:
+   536                                                           pickle.dump(cache_data, f)
+   537                                                       print(f"✅ 特征已缓存（轻量化），退出...")
+   538                                                       exit(0)
+   539                                                   
+   540                                                   # print(f"xixi")
+   541                                                   # exit(0)
+   542                                                   
+   543         1     682209.5 682209.5      1.9          audio_samples = read_audio(audio_path)
+   544                                                   
+   545                                                   # 计算音频时长和需要的视频帧数
+   546         1          2.7      2.7      0.0          if limit_video_frames:
+   547         1         33.0     33.0      0.0              audio_duration = len(audio_samples) / audio_sample_rate  # 音频时长(秒)
+   548         1          2.0      2.0      0.0              needed_frames = int(audio_duration * video_fps)  # 需要处理的视频帧数
+   549         1        471.6    471.6      0.0              print(f"音频时长: {audio_duration:.2f}秒, 需要处理: {needed_frames}帧")
+   550                                                       
+   551                                                       # 确保不超过可用帧数
+   552         1          5.7      5.7      0.0              needed_frames = min(needed_frames, len(faces))
+   553                                                       
+   554                                                       # 调整为num_frames的整数倍
+   555         1          0.7      0.7      0.0              needed_frames = (needed_frames // num_frames) * num_frames
+   556                                                       
+   557         1          0.4      0.4      0.0              if needed_frames > 0:
+   558         1        351.5    351.5      0.0                  print(f"根据音频长度，将处理视频的前{needed_frames}帧")
+   559         1         61.5     61.5      0.0                  faces = faces[:needed_frames]
+   560                                                           # 修剪original_video_frames，确保后续操作不会溢出
+   561         1          2.3      2.3      0.0                  original_video_frames = original_video_frames[:needed_frames]
+   562                                                       else:
+   563                                                           print("警告: 计算出的帧数过少，使用默认处理方式")
+   564                                                           
+   565                                                   # 1. Default height and width to unet
+   566         1          0.5      0.5      0.0          height = height or self.unet.config.sample_size * self.vae_scale_factor
+   567         1          0.2      0.2      0.0          width = width or self.unet.config.sample_size * self.vae_scale_factor
+   568                                           
+   569                                                   # 2. Check inputs
+   570         1         14.5     14.5      0.0          self.check_inputs(height, width, callback_steps)
+   571                                           
+   572                                                   # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+   573                                                   # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+   574                                                   # corresponds to doing no classifier free guidance.
+   575         1          3.1      3.1      0.0          do_classifier_free_guidance = guidance_scale > 1.0
+   576                                           
+   577                                                   # 3. set timesteps
+   578         1       4744.1   4744.1      0.0          self.scheduler.set_timesteps(num_inference_steps, device=device)
+   579         1          1.0      1.0      0.0          timesteps = self.scheduler.timesteps
+   580                                           
+   581                                                   # 4. Prepare extra step kwargs.
+   582         1        423.5    423.5      0.0          extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+   583                                           
+   584         1          7.6      7.6      0.0          self.video_fps = video_fps
+   585                                           
+   586         1         16.3     16.3      0.0          if self.unet.add_audio_layer:
+   587         1     519749.7 519749.7      1.4              whisper_feature = self.audio_encoder.audio2feat(audio_path)
+   588         1     351131.4 351131.4      1.0              whisper_chunks = self.audio_encoder.feature2chunks(feature_array=whisper_feature, fps=video_fps)
+   589                                           
+   590         1          3.9      3.9      0.0              num_inferences = min(len(faces), len(whisper_chunks)) // num_frames
+   591                                                   else:
+   592                                                       num_inferences = len(faces) // num_frames
+   593                                           
+   594         1         14.9     14.9      0.0          faces = faces[:num_inferences * num_frames]
+   595                                                   # 对人脸使用ESRGAN超分处理
+   596         1          0.6      0.6      0.0          if high_rs_faces:
+   597                                                       print("正在对人脸进行ESRGAN超分处理...")
+   598                                                       faces = self.enhance_faces_with_esrgan(faces, device)
+   599                                           
+   600         1          0.5      0.5      0.0          temp_dir = "temp"
+   601         1        161.3    161.3      0.0          if os.path.exists(temp_dir):
+   602         1       4864.7   4864.7      0.0              shutil.rmtree(temp_dir)
+   603         1       2674.0   2674.0      0.0          os.makedirs(temp_dir, exist_ok=True)
+   604                                           
+   605         1          0.4      0.4      0.0          if output_orig_face_video:
+   606                                                       orig_faces_np =  rearrange(faces, "f c h w -> f h w c")
+   607                                                       orig_faces_np = orig_faces_np.to(torch.uint8).cpu().numpy()
+   608                                                       # orig_faces_frames_out_path = video_out_path.replace(".mp4", "_orig_faces.mp4")
+   609                                                       # write_video(os.path.join(temp_dir, "orig_faces_video.mp4"), orig_faces_np, fps=video_fps)
+   610                                                       # command = f"ffmpeg -y -loglevel error -nostdin -i {os.path.join(temp_dir, 'orig_faces_video.mp4')} -i {os.path.join(temp_dir, 'audio.wav')} -c:v libx264 -c:a aac -q:v 0 -q:a 0 {orig_faces_frames_out_path}"
+   611                                                       # subprocess.run(command, shell=True)
+   612                                                       # print(f"原人脸: {orig_faces_frames_out_path}")
+   613                                           
+   614         1          0.4      0.4      0.0          synced_video_frames = []
+   615                                                   # masked_video_frames = []
+   616                                           
+   617         1         20.4     20.4      0.0          num_channels_latents = self.vae.config.latent_channels
+   618                                           
+   619                                                   # Prepare latent variables
+   620         2        267.3    133.7      0.0          all_latents = self.prepare_latents(
+   621         1          0.2      0.2      0.0              batch_size,
+   622         1          0.4      0.4      0.0              num_frames * num_inferences,
+   623         1          0.2      0.2      0.0              num_channels_latents,
+   624         1          0.2      0.2      0.0              height,
+   625         1          0.2      0.2      0.0              width,
+   626         1          0.2      0.2      0.0              weight_dtype,
+   627         1          0.1      0.1      0.0              device,
+   628         1          0.1      0.1      0.0              generator,
+   629                                                   )
+   630                                           
+   631                                                   # 初始化总体统计变量
+   632         1          0.6      0.6      0.0          total_batch_denoising_time = 0.0
+   633         1          0.2      0.2      0.0          total_batch_unet_time = 0.0
+   634                                           
+   635        33       5376.7    162.9      0.0          for i in tqdm.tqdm(range(num_inferences), desc="Doing inference..."):
+   636        32         49.5      1.5      0.0              if self.unet.add_audio_layer:
+   637        32       6850.8    214.1      0.0                  audio_embeds = torch.stack(whisper_chunks[i * num_frames : (i + 1) * num_frames])
+   638        32    3926669.6 122708.4     10.7                  audio_embeds = audio_embeds.to(device, dtype=weight_dtype)
+   639        32         19.7      0.6      0.0                  if do_classifier_free_guidance:
+   640                                                               null_audio_embeds = torch.zeros_like(audio_embeds)
+   641                                                               audio_embeds = torch.cat([null_audio_embeds, audio_embeds])
+   642                                                       else:
+   643                                                           audio_embeds = None
+   644        32        415.6     13.0      0.0              inference_faces = faces[i * num_frames : (i + 1) * num_frames]
+   645        32        462.0     14.4      0.0              latents = all_latents[:, :, i * num_frames : (i + 1) * num_frames]
+   646        64      88473.8   1382.4      0.2              pixel_values, masked_pixel_values, masks = self.image_processor.prepare_masks_and_masked_images(
+   647        32          5.6      0.2      0.0                  inference_faces, affine_transform=False
+   648                                                       )
+   649                                           
+   650                                                       # 7. Prepare mask latent variables
+   651        64     624842.3   9763.2      1.7              mask_latents, masked_image_latents = self.prepare_mask_latents(
+   652        32          5.4      0.2      0.0                  masks,
+   653        32          4.7      0.1      0.0                  masked_pixel_values,
+   654        32          3.9      0.1      0.0                  height,
+   655        32          4.7      0.1      0.0                  width,
+   656        32          3.9      0.1      0.0                  weight_dtype,
+   657        32          4.7      0.1      0.0                  device,
+   658        32          3.6      0.1      0.0                  generator,
+   659        32          3.6      0.1      0.0                  do_classifier_free_guidance,
+   660                                                       )
+   661                                           
+   662                                                       # 8. Prepare image latents
+   663        64     109126.2   1705.1      0.3              image_latents = self.prepare_image_latents(
+   664        32          5.9      0.2      0.0                  pixel_values,
+   665        32          4.9      0.2      0.0                  device,
+   666        32          4.2      0.1      0.0                  weight_dtype,
+   667        32          4.4      0.1      0.0                  generator,
+   668        32          4.0      0.1      0.0                  do_classifier_free_guidance,
+   669                                                       )
+   670                                           
+   671                                                       # 9. Denoising loop
+   672        32         43.3      1.4      0.0              denoising_start_time = time.time()
+   673        32          9.8      0.3      0.0              total_unet_time = 0.0
+   674        32        152.2      4.8      0.0              num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
+   675        64      12028.6    187.9      0.0              with self.progress_bar(total=num_inference_steps) as progress_bar:
+   676       672       1410.9      2.1      0.0                  for j, t in enumerate(timesteps):
+   677       640        242.1      0.4      0.0                      step_start_time = time.time()
+   678                                                               
+   679                                                               # expand the latents if we are doing classifier free guidance
+   680       640        954.3      1.5      0.0                      latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+   681                                           
+   682                                                               # concat latents, mask, masked_image_latents in the channel dimension
+   683       640        509.3      0.8      0.0                      latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+   684      1280      27709.9     21.6      0.1                      latent_model_input = torch.cat(
+   685       640        223.3      0.3      0.0                          [latent_model_input, mask_latents, masked_image_latents, image_latents], dim=1
+   686                                                               )
+   687                                           
+   688                                                               # predict the noise residual
+   689       640        249.3      0.4      0.0                      unet_start_time = time.time()
+   690       640    8134412.8  12710.0     22.1                      noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=audio_embeds).sample
+   691       640        669.8      1.0      0.0                      unet_time = time.time() - unet_start_time
+   692       640        208.6      0.3      0.0                      total_unet_time += unet_time
+   693                                           
+   694                                                               # perform guidance
+   695       640        150.6      0.2      0.0                      if do_classifier_free_guidance:
+   696                                                                   noise_pred_uncond, noise_pred_audio = noise_pred.chunk(2)
+   697                                                                   noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_audio - noise_pred_uncond)
+   698                                           
+   699                                                               # compute the previous noisy sample x_t -> x_t-1
+   700       640    1202943.8   1879.6      3.3                      latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+   701                                           
+   702       640        513.8      0.8      0.0                      step_time = time.time() - step_start_time
+   703                                                               
+   704                                                               # call the callback, if provided
+   705       640       3310.0      5.2      0.0                      if j == len(timesteps) - 1 or ((j + 1) > num_warmup_steps and (j + 1) % self.scheduler.order == 0):
+   706       640      12666.3     19.8      0.0                          progress_bar.update()
+   707       640        280.6      0.4      0.0                          if callback is not None and j % callback_steps == 0:
+   708                                                                       callback(j, t, latents)
+   709                                           
+   710        32         21.6      0.7      0.0              denoising_total_time = time.time() - denoising_start_time
+   711        32         11.8      0.4      0.0              avg_step_time = denoising_total_time / num_inference_steps
+   712        32          5.9      0.2      0.0              avg_unet_time = total_unet_time / num_inference_steps
+   713                                                       # print(f"推理批次 {i+1}/{num_inferences} 去噪循环完成: 总耗时={denoising_total_time:.3f}s, 平均每步={avg_step_time:.3f}s, 平均UNet推理={avg_unet_time:.3f}s")
+   714                                           
+   715                                                       # 累积到总体统计
+   716        32          7.5      0.2      0.0              total_batch_denoising_time += denoising_total_time
+   717        32          7.2      0.2      0.0              total_batch_unet_time += total_unet_time
+   718                                           
+   719                                                       # Recover the pixel values
+   720        32     954218.4  29819.3      2.6              decoded_latents = self.decode_latents(latents)
+   721        64       2157.2     33.7      0.0              decoded_latents = self.paste_surrounding_pixels_back(
+   722        32        660.2     20.6      0.0                  decoded_latents, pixel_values, 1 - masks, device, weight_dtype
+   723                                                       )
+   724        32         32.7      1.0      0.0              synced_video_frames.append(decoded_latents)
+   725                                                       # masked_video_frames.append(masked_pixel_values)
+   726                                           
+   727                                                   # 打印所有批次的总体统计
+   728         1          0.3      0.3      0.0          if num_inferences > 0:
+   729         1          0.3      0.3      0.0              overall_avg_denoising_time = total_batch_denoising_time / num_inferences
+   730         1          0.4      0.4      0.0              overall_avg_unet_time = total_batch_unet_time / (num_inferences * num_inference_steps)
+   731         1        427.8    427.8      0.0              print(f"🎯 所有批次统计: 共{num_inferences}个批次, 总去噪耗时={total_batch_denoising_time:.3f}s, 总UNet推理耗时={total_batch_unet_time:.3f}s, 平均去噪耗时={overall_avg_denoising_time:.3f}s, 平均UNet推理耗时={overall_avg_unet_time:.3f}s")
+   732                                           
+   733                                                   # 在调用restore_video之前保存原始生成的视频帧
+   734         1          0.3      0.3      0.0          if output_small_face_video:
+   735                                                       # 合并所有帧
+   736                                                       raw_synced_frames = torch.cat(synced_video_frames)
+   737                                                       # 转换为numpy数组以便保存
+   738                                                       raw_synced_frames_np = self.pixel_values_to_images(raw_synced_frames)
+   739                                                       # 保存原始生成的脸部视频
+   740                                                       # write_video(small_face_video_path, raw_synced_frames_np, fps=video_fps)
+   741                                                       # print(f"原始脸部视频已保存到: {small_face_video_path}")
+   742                                           
+   743                                                       # raw_frames_out_path = video_out_path.replace(".mp4", "_raw_generated.mp4")
+   744                                                       # write_video(os.path.join(temp_dir, "raw_generated_video.mp4"), raw_synced_frames_np, fps=video_fps)
+   745                                                       # command = f"ffmpeg -y -loglevel error -nostdin -i {os.path.join(temp_dir, 'raw_generated_video.mp4')} -i {os.path.join(temp_dir, 'audio.wav')} -c:v libx264 -c:a aac -q:v 0 -q:a 0 {raw_frames_out_path}"
+   746                                                       # subprocess.run(command, shell=True)
+   747                                                       # print(f"已生成模型直接生成的视频帧（无贴回）: {raw_frames_out_path}")
+   748                                           
+   749         2    9792399.5    5e+06     26.7          synced_video_frames = self.restore_video(
+   750         1        161.5    161.5      0.0              torch.cat(synced_video_frames), original_video_frames, boxes, affine_matrices
+   751                                                   )
+   752                                                   # masked_video_frames = self.restore_video(
+   753                                                   #     torch.cat(masked_video_frames), original_video_frames, boxes, affine_matrices
+   754                                                   # )
+   755                                           
+   756         1          7.4      7.4      0.0          audio_samples_remain_length = int(synced_video_frames.shape[0] / video_fps * audio_sample_rate)
+   757         1         60.8     60.8      0.0          audio_samples = audio_samples[:audio_samples_remain_length].cpu().numpy()
+   758                                           
+   759         1          0.4      0.4      0.0          if is_train:
+   760         1       5140.3   5140.3      0.0              self.unet.train()
+   761                                           
+   762                                                   # temp_dir = "temp"
+   763                                                   # if os.path.exists(temp_dir):
+   764                                                   #     shutil.rmtree(temp_dir)
+   765                                                   # os.makedirs(temp_dir, exist_ok=True)
+   766                                           
+   767         1    3069394.0    3e+06      8.4          write_video(os.path.join(temp_dir, "video.mp4"), synced_video_frames, fps=25)
+   768                                                   # write_video(video_mask_path, masked_video_frames, fps=25)
+   769                                           
+   770         1      40475.6  40475.6      0.1          sf.write(os.path.join(temp_dir, "audio.wav"), audio_samples, audio_sample_rate)
+   771                                           
+   772         1         17.1     17.1      0.0          command = f"ffmpeg -y -loglevel error -nostdin -i {os.path.join(temp_dir, 'video.mp4')} -i {os.path.join(temp_dir, 'audio.wav')} -c:v libx264 -c:a aac -q:v 0 -q:a 0 {video_out_path}"
+   773         1    1940921.5    2e+06      5.3          subprocess.run(command, shell=True)
+   774                                           
+   775         1          1.0      1.0      0.0          if output_orig_face_video:
+   776                                                       orig_faces_frames_out_path = video_out_path.replace(".mp4", "_orig_faces.mp4")
+   777                                                       write_video(os.path.join(temp_dir, "orig_faces_video.mp4"), orig_faces_np, fps=video_fps)
+   778                                                       command = f"ffmpeg -y -loglevel error -nostdin -i {os.path.join(temp_dir, 'orig_faces_video.mp4')} -i {os.path.join(temp_dir, 'audio.wav')} -c:v libx264 -c:a aac -q:v 0 -q:a 0 {orig_faces_frames_out_path}"
+   779                                                       subprocess.run(command, shell=True)
+   780                                                       print(f"原人脸: {orig_faces_frames_out_path}")
+   781                                           
+   782         1          0.4      0.4      0.0          if output_small_face_video:
+   783                                                       raw_frames_out_path = video_out_path.replace(".mp4", "_raw_generated.mp4")
+   784                                                       write_video(os.path.join(temp_dir, "raw_generated_video.mp4"), raw_synced_frames_np, fps=video_fps)
+   785                                                       command = f"ffmpeg -y -loglevel error -nostdin -i {os.path.join(temp_dir, 'raw_generated_video.mp4')} -i {os.path.join(temp_dir, 'audio.wav')} -c:v libx264 -c:a aac -q:v 0 -q:a 0 {raw_frames_out_path}"
+   786                                                       subprocess.run(command, shell=True)
+   787                                                       print(f"已生成模型直接生成的视频帧（无贴回）: {raw_frames_out_path}")
+
+Total time: 8.71562 s
+File: /home/work/hy_01/mmuplt-avatarv3/latent_sync/latentsync/utils/affine_transform_v01_0516.py
+Function: restore_img_torch at line 356
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   356                                               @profile
+   357                                               def restore_img_torch(self, input_img, face, affine_matrix):
+   358       512        705.8      1.4      0.0          h, w, _ = input_img.shape
+   359       512        612.3      1.2      0.0          h_up, w_up = int(h * self.upscale_factor), int(w * self.upscale_factor)
+   360       512     525965.8   1027.3      6.0          upsample_img = cv2.resize(input_img, (w_up, h_up), interpolation=cv2.INTER_LANCZOS4)
+   361       512       5072.7      9.9      0.1          inverse_affine = cv2.invertAffineTransform(affine_matrix)
+   362       512       5806.5     11.3      0.1          inverse_affine *= self.upscale_factor
+   363                                           
+   364       512        345.8      0.7      0.0          extra_offset = 0.5 * self.upscale_factor if self.upscale_factor > 1 else 0
+   365       512       3406.6      6.7      0.0          inverse_affine[:, 2] += extra_offset
+   366                                           
+   367       512    1521911.0   2972.5     17.5          inv_restored = cv2.warpAffine(face, inverse_affine, (w_up, h_up), flags=cv2.INTER_LANCZOS4)
+   368                                                   # mask = np.ones((self.face_size[1], self.face_size[0]), dtype=np.float32)
+   369       512     195222.0    381.3      2.2          inv_mask = cv2.warpAffine(self.mask, inverse_affine, (w_up, h_up)) # cv2.imwrite('/home/work/houyi/pj_25_q1/mmuplt-avatarv3/hy_test/inv_mask.png', (inv_mask * 255).astype(np.uint8))
+   370                                           
+   371                                                   # valid_points = self.get_transformed_mask_coordinates(inverse_affine, w_up, h_up, debug=True)
+   372                                           
+   373       512     329607.3    643.8      3.8          inv_mask_erosion = cv2.erode(inv_mask, np.ones((int(2 * self.upscale_factor), int(2 * self.upscale_factor)), np.uint8))
+   374                                           
+   375       512     149726.9    292.4      1.7          inv_mask_erosion_t = torch.from_numpy(inv_mask_erosion).to(self.device).unsqueeze(-1)
+   376       512     131894.9    257.6      1.5          inv_restored_t = torch.from_numpy(inv_restored).to(self.device)
+   377       512      12346.6     24.1      0.1          pasted_face_t = inv_mask_erosion_t * inv_restored_t
+   378                                           
+   379       512      27953.1     54.6      0.3          total_face_area = torch.sum(inv_mask_erosion_t).item()
+   380       512       1249.9      2.4      0.0          w_edge = int(total_face_area**0.5) // 20
+   381       512        787.5      1.5      0.0          w_edge = max(1, w_edge)  # 确保w_edge至少为1
+   382       512        272.1      0.5      0.0          erosion_radius = w_edge * 2
+   383                                                   
+   384       512    1194717.9   2333.4     13.7          inv_mask_center = cv2.erode(inv_mask_erosion, np.ones((erosion_radius, erosion_radius), np.uint8))
+   385       512        401.8      0.8      0.0          blur_size = w_edge * 2
+   386       512        778.1      1.5      0.0          blur_size = max(1, blur_size)  # 确保blur_size至少为1
+   387       512        412.8      0.8      0.0          if blur_size % 2 == 0:  # 确保blur_size为奇数
+   388       512        250.2      0.5      0.0              blur_size += 1
+   389       512    2893827.2   5652.0     33.2          inv_soft_mask = cv2.GaussianBlur(inv_mask_center, (blur_size, blur_size), 0)
+   390       512       1809.7      3.5      0.0          inv_soft_mask = inv_soft_mask[:, :, None]
+   391                                                   
+   392       512     156690.7    306.0      1.8          inv_soft_mask_t = torch.from_numpy(inv_soft_mask).to(self.device)
+   393       512     114655.5    223.9      1.3          upsample_img_t = torch.from_numpy(upsample_img).to(self.device)
+   394                                                   
+   395       512      33601.6     65.6      0.4          result_t = inv_soft_mask_t * pasted_face_t + (1 - inv_soft_mask_t) * upsample_img_t
+   396       512     484244.2    945.8      5.6          result = result_t.cpu().numpy()
+   397                                                   
+   398       512     378858.7    740.0      4.3          if np.max(result) > 256:
+   399                                                       result = result.astype(np.uint16)
+   400                                                   else:
+   401       512     542298.0   1059.2      6.2              result = result.astype(np.uint8)
+   402       512        185.0      0.4      0.0          return result
+
+Total time: 0 s
+File: /home/work/hy_01/mmuplt-avatarv3/latent_sync/latentsync/utils/affine_transform_v01_0516.py
+Function: restore_img_torch_v2_hangge at line 451
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   451                                               @profile
+   452                                               def restore_img_torch_v2_hangge(self, input_img, face, affine_matrix):
+   453                                                   """
+   454                                                   Restored version using PyTorch operations for better GPU utilization
+   455                                                   
+   456                                                   Args:
+   457                                                       input_img: numpy array (h, w, c)
+   458                                                       face: torch.Tensor (c, h, w)
+   459                                                       affine_matrix: numpy array (2, 3)
+   460                                                   """
+   461                                                   device = face.device
+   462                                                   
+   463                                                   # Get dimensions
+   464                                                   h, w, _ = input_img.shape
+   465                                                   h_up, w_up = int(h * self.upscale_factor), int(w * self.upscale_factor)
+   466                                                   
+   467                                                   # Convert input_img to torch tensor
+   468                                                   input_img_t = torch.from_numpy(input_img).to(device).float()
+   469                                                   if len(input_img_t.shape) == 3:
+   470                                                       input_img_t = input_img_t.permute(2, 0, 1).unsqueeze(0)
+   471                                                   
+   472                                                   # Upsample input image
+   473                                                   upsample_img_t = F.interpolate(
+   474                                                       input_img_t, 
+   475                                                       size=(h_up, w_up), 
+   476                                                       mode='bicubic', 
+   477                                                       align_corners=True
+   478                                                   )
+   479                                                   
+   480                                                   # Calculate inverse affine transform
+   481                                                   inverse_affine = cv2.invertAffineTransform(affine_matrix)
+   482                                                   inverse_affine *= self.upscale_factor
+   483                                                   
+   484                                                   # Add extra offset
+   485                                                   extra_offset = 0.5 * self.upscale_factor if self.upscale_factor > 1 else 0
+   486                                                   inverse_affine[:, 2] += extra_offset
+   487                                                   
+   488                                                   # Warp face using inverse affine transform
+   489                                                   inv_restored_t = warp_affine_torch(face.unsqueeze(0), inverse_affine, (h_up, w_up))
+   490                                                   inv_restored_t = inv_restored_t.squeeze(0)
+   491                                                   
+   492                                                   # Create and warp mask
+   493                                                   mask_t = torch.ones((1, self.face_size[1], self.face_size[0]), device=device)
+   494                                                   inv_mask_t = warp_affine_torch(mask_t, inverse_affine, (h_up, w_up))
+   495                                                   
+   496                                                   # Perform erosion
+   497                                                   kernel_size = int(2 * self.upscale_factor)
+   498                                                   inv_mask_erosion_t = erode_torch(inv_mask_t, kernel_size, device)
+   499                                                   
+   500                                                   # Calculate face area and edge width
+   501                                                   total_face_area = torch.sum(inv_mask_erosion_t).item()
+   502                                                   w_edge = int(total_face_area**0.5) // 20
+   503                                                   w_edge = max(1, w_edge)  # 确保w_edge至少为1
+   504                                                   erosion_radius = w_edge * 2
+   505                                                   
+   506                                                   # Create center mask with erosion
+   507                                                   inv_mask_center_t = erode_torch(inv_mask_erosion_t, erosion_radius, device)
+   508                                                   
+   509                                                   # Apply Gaussian blur
+   510                                                   blur_size = w_edge * 2
+   511                                                   blur_size = max(1, blur_size)  # 确保blur_size至少为1
+   512                                                   if blur_size % 2 == 0:  # 确保blur_size为奇数
+   513                                                       blur_size += 1
+   514                                                   inv_soft_mask_t = gaussian_blur_torch(inv_mask_center_t, blur_size)
+   515                                                   
+   516                                                   # Prepare tensors for final composition
+   517                                                   inv_restored_t = inv_restored_t.permute(1, 2, 0)
+   518                                                   inv_mask_erosion_t = inv_mask_erosion_t.squeeze(0).squeeze(0).unsqueeze(-1)
+   519                                                   inv_soft_mask_t = inv_soft_mask_t.squeeze(0).squeeze(0).unsqueeze(-1)
+   520                                                   upsample_img_t = upsample_img_t.squeeze(0).permute(1, 2, 0)
+   521                                                   
+   522                                                   # Ensure all tensors have the same spatial dimensions
+   523                                                   target_h, target_w = inv_restored_t.shape[:2]
+   524                                                   
+   525                                                   # Resize masks to match restored face dimensions if needed
+   526                                                   if inv_mask_erosion_t.shape[:2] != (target_h, target_w):
+   527                                                       inv_mask_erosion_t = F.interpolate(
+   528                                                           inv_mask_erosion_t.permute(2, 0, 1).unsqueeze(0), 
+   529                                                           size=(target_h, target_w), 
+   530                                                           mode='nearest'
+   531                                                       ).squeeze(0).permute(1, 2, 0)
+   532                                                       
+   533                                                   if inv_soft_mask_t.shape[:2] != (target_h, target_w):
+   534                                                       inv_soft_mask_t = F.interpolate(
+   535                                                           inv_soft_mask_t.permute(2, 0, 1).unsqueeze(0), 
+   536                                                           size=(target_h, target_w), 
+   537                                                           mode='nearest'
+   538                                                       ).squeeze(0).permute(1, 2, 0)
+   539                                                       
+   540                                                   if upsample_img_t.shape[:2] != (target_h, target_w):
+   541                                                       upsample_img_t = F.interpolate(
+   542                                                           upsample_img_t.permute(2, 0, 1).unsqueeze(0), 
+   543                                                           size=(target_h, target_w), 
+   544                                                           mode='bilinear',
+   545                                                           align_corners=True
+   546                                                       ).squeeze(0).permute(1, 2, 0)
+   547                                                   
+   548                                                   # Compose final result
+   549                                                   pasted_face_t = inv_mask_erosion_t * inv_restored_t
+   550                                                   result_t = inv_soft_mask_t * pasted_face_t + (1 - inv_soft_mask_t) * upsample_img_t
+   551                                                   
+   552                                                   # Convert back to numpy
+   553                                                   result = result_t.cpu().numpy()
+   554                                                   
+   555                                                   # Handle data type
+   556                                                   if np.max(result) > 256:
+   557                                                       result = result.astype(np.uint16)
+   558                                                   else:
+   559                                                       result = result.astype(np.uint8)
+   560                                                   
+   561                                                   return result
+

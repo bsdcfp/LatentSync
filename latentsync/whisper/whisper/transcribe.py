@@ -15,6 +15,8 @@ from .utils import exact_div, format_timestamp, optional_int, optional_float, st
 if TYPE_CHECKING:
     from .model import Whisper
 
+import torch.nn.functional as F
+
 
 def transcribe(
         model: "Whisper",
@@ -82,8 +84,8 @@ def transcribe(
     if dtype == torch.float32:
         decode_options["fp16"] = False
 
-    mel = log_mel_spectrogram(audio)
-   
+    mel, origin_audio_frame = log_mel_spectrogram(audio)
+
     all_segments = []
     def add_segment(
             *, start: float, end: float, encoder_embeddings
@@ -99,33 +101,70 @@ def transcribe(
     # show the progress bar when verbose is False (otherwise the transcribed text will be printed)
     num_frames = mel.shape[-1]
     seek = 0
-    previous_seek_value = seek
-    sample_skip = 3000 # 
+    overlap = 1000    # 重叠帧数
+    # print(f"N_FRAMES: {N_FRAMES}") # N_FRAMES: 3000
+    step = N_FRAMES - overlap  # 步长 = 3000 - 500 = 2500 # 2000 # 步长 = 3000 - 1000 = 2000
+
     with tqdm.tqdm(total=num_frames, unit='frames', disable=verbose is not False) as pbar:
+        effective_processed = 0  # 有效处理的音频帧数
+        
         while seek < num_frames:
-            # seek是开始的帧数
-            end_seek = min(seek + sample_skip, num_frames)
-            segment = pad_or_trim(mel[:,seek:seek+sample_skip], N_FRAMES).to(model.device).to(dtype)
+            end_seek = min(seek + N_FRAMES, num_frames)
+            segment = pad_or_trim(mel[:,seek:end_seek], N_FRAMES).to(model.device).to(dtype)
             
             single = segment.ndim == 2
             if single:
                 segment = segment.unsqueeze(0)
             if dtype == torch.float16:
                 segment = segment.half()
-            audio_features, embeddings  = model.encoder(segment, include_embeddings = True)
+            audio_features, embeddings = model.encoder(segment, include_embeddings=True)
             
-            encoder_embeddings = embeddings
-            #print(f"encoder_embeddings shape {encoder_embeddings.shape}")
+            # 根据窗口位置处理重叠部分
+            if seek == 0:
+                if end_seek == num_frames:
+                    # 短音频，一次处理完
+                    save_start = 0
+                    save_end = (end_seek - seek) // 2
+                    current_embeddings = embeddings[:, :, :save_end, :]
+                    effective_processed = num_frames
+                else:
+                    # 第一个窗口，正常重叠处理
+                    save_start = 0
+                    save_end = (step + overlap // 2) // 2
+                    current_embeddings = embeddings[:, :, :save_end, :]
+                    effective_processed = step + overlap // 2
+            elif num_frames <= seek + N_FRAMES:
+                # 最后窗口：当前窗口可以覆盖到音频结尾
+                save_start = effective_processed // 2
+                remaining_frames = num_frames - effective_processed
+                save_end = save_start + remaining_frames // 2
+                embedding_start = (effective_processed - seek) // 2
+                embedding_end = embedding_start + remaining_frames // 2
+                current_embeddings = embeddings[:, :, embedding_start:embedding_end, :]
+                effective_processed = num_frames
+            else:
+                # 中间窗口：跳过前后重叠部分
+                save_start = effective_processed // 2
+                save_end = save_start + step // 2
+                embedding_start = overlap // 4
+                embedding_end = embedding_start + step // 2
+                current_embeddings = embeddings[:, :, embedding_start:embedding_end, :]
+                effective_processed += step
+                
             add_segment(
-                start=seek,
-                end=end_seek,
-                #text_tokens=tokens,
-                #result=result,
-                encoder_embeddings=encoder_embeddings,
+                start=save_start,
+                end=save_end,
+                encoder_embeddings=current_embeddings,
             )
-            seek+=sample_skip
+            
+            # 如果已经处理完所有帧，退出循环
+            if effective_processed >= num_frames:
+                break
+                
+            seek += step
+            pbar.update(min(step, num_frames - (seek - step)))
     
-    return dict(segments=all_segments)
+    return dict(segments=all_segments), origin_audio_frame
 
 
 def cli():
@@ -186,7 +225,8 @@ def cli():
     model = load_model(model_name, device=device, download_root=model_dir)
 
     for audio_path in args.pop("audio"):
-        result = transcribe(model, audio_path, temperature=temperature, **args)
+        # result = transcribe(model, audio_path, temperature=temperature, **args)
+        result, origin_audio_frame = transcribe(model, audio_path, temperature=temperature, **args)
 
         audio_basename = os.path.basename(audio_path)
 

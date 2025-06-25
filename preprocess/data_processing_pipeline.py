@@ -14,6 +14,7 @@
 
 import argparse
 import os
+import time
 from preprocess.affine_transform import affine_transform_multi_gpus
 from preprocess.remove_broken_videos import remove_broken_videos_multiprocessing
 from preprocess.detect_shot import detect_shot_multiprocessing
@@ -23,51 +24,80 @@ from preprocess.segment_videos import segment_videos_multiprocessing
 from preprocess.sync_av import sync_av_multi_gpus
 from preprocess.filter_visual_quality import filter_visual_quality_multi_gpus
 from preprocess.remove_incorrect_affined import remove_incorrect_affined_multiprocessing
-from latentsync.utils.util import check_model_and_download
 
 
 def data_processing_pipeline(
     total_num_workers, per_gpu_num_workers, resolution, sync_conf_threshold, temp_dir, input_dir
 ):
-    print("Checking models are downloaded...")
-    check_model_and_download("checkpoints/auxiliary/syncnet_v2.model")
-    check_model_and_download("checkpoints/auxiliary/sfd_face.pth")
-    check_model_and_download("checkpoints/auxiliary/koniq_pretrained.pkl")
-
+    # 记录总处理开始时间
+    total_start_time = time.time()
+    
     print("Removing broken videos...")
+    step_start_time = time.time()
     remove_broken_videos_multiprocessing(input_dir, total_num_workers)
+    step_end_time = time.time()
+    print(f"完成移除损坏视频步骤，耗时: {step_end_time - step_start_time:.2f}秒")
 
     print("Resampling FPS hz...")
+    step_start_time = time.time()
     resampled_dir = os.path.join(os.path.dirname(input_dir), "resampled")
     resample_fps_hz_multiprocessing(input_dir, resampled_dir, total_num_workers)
+    step_end_time = time.time()
+    print(f"完成重采样FPS步骤，耗时: {step_end_time - step_start_time:.2f}秒")
 
     print("Detecting shot...")
+    step_start_time = time.time()
     shot_dir = os.path.join(os.path.dirname(input_dir), "shot")
     detect_shot_multiprocessing(resampled_dir, shot_dir, total_num_workers)
+    step_end_time = time.time()
+    print(f"完成检测镜头步骤，耗时: {step_end_time - step_start_time:.2f}秒")
 
     print("Segmenting videos...")
+    step_start_time = time.time()
     segmented_dir = os.path.join(os.path.dirname(input_dir), "segmented")
     segment_videos_multiprocessing(shot_dir, segmented_dir, total_num_workers)
+    step_end_time = time.time()
+    print(f"完成视频分段步骤，耗时: {step_end_time - step_start_time:.2f}秒")
 
-    # If there are too many videos, you can first use this step to filter and reduce the quantity
-    # print("Filtering high resolution...")
-    # high_resolution_dir = os.path.join(os.path.dirname(input_dir), "high_resolution")
-    # filter_high_resolution_multiprocessing(segmented_dir, high_resolution_dir, resolution, total_num_workers)
+    print("Filtering high resolution...")
+    step_start_time = time.time()
+    high_resolution_dir = os.path.join(os.path.dirname(input_dir), "high_resolution")
+    filter_high_resolution_multiprocessing(segmented_dir, high_resolution_dir, resolution, total_num_workers)
+    step_end_time = time.time()
+    print(f"完成高分辨率过滤步骤，耗时: {step_end_time - step_start_time:.2f}秒")
 
     print("Affine transforming videos...")
+    step_start_time = time.time()
     affine_transformed_dir = os.path.join(os.path.dirname(input_dir), "affine_transformed")
-    affine_transform_multi_gpus(segmented_dir, affine_transformed_dir, temp_dir, resolution, per_gpu_num_workers // 2)
+    affine_transform_multi_gpus(
+        high_resolution_dir, affine_transformed_dir, temp_dir, resolution, per_gpu_num_workers // 2
+    )
+    step_end_time = time.time()
+    print(f"完成仿射变换步骤，耗时: {step_end_time - step_start_time:.2f}秒")
 
-    # print("Removing incorrect affined videos...")
-    # remove_incorrect_affined_multiprocessing(affine_transformed_dir, total_num_workers)
+    print("Removing incorrect affined videos...")
+    step_start_time = time.time()
+    remove_incorrect_affined_multiprocessing(affine_transformed_dir, total_num_workers)
+    step_end_time = time.time()
+    print(f"完成移除错误仿射视频步骤，耗时: {step_end_time - step_start_time:.2f}秒")
 
     print("Syncing audio and video...")
+    step_start_time = time.time()
     av_synced_dir = os.path.join(os.path.dirname(input_dir), f"av_synced_{sync_conf_threshold}")
     sync_av_multi_gpus(affine_transformed_dir, av_synced_dir, temp_dir, per_gpu_num_workers, sync_conf_threshold)
+    step_end_time = time.time()
+    print(f"完成音视频同步步骤，耗时: {step_end_time - step_start_time:.2f}秒")
 
     print("Filtering visual quality...")
+    step_start_time = time.time()
     high_visual_quality_dir = os.path.join(os.path.dirname(input_dir), "high_visual_quality")
     filter_visual_quality_multi_gpus(av_synced_dir, high_visual_quality_dir, per_gpu_num_workers)
+    step_end_time = time.time()
+    print(f"完成视觉质量过滤步骤，耗时: {step_end_time - step_start_time:.2f}秒")
+    
+    # 计算并打印总处理时间
+    total_end_time = time.time()
+    print(f"\n整个数据处理流程完成，总耗时: {total_end_time - total_start_time:.2f}秒")
 
 
 if __name__ == "__main__":
