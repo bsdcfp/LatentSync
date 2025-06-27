@@ -239,6 +239,34 @@ def main(config, args):
     else:
         print(f"  - DiyCache状态: 未启用")
     print(f"  - 输出视频: {args.video_out_path}")
+    
+    # 添加视频信息统计
+    try:
+        import cv2
+        if os.path.exists(args.video_out_path):
+            cap = cv2.VideoCapture(args.video_out_path)
+            if cap.isOpened():
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                duration = frame_count / fps if fps > 0 else 0
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                cap.release()
+                
+                print(f"📹 视频信息:")
+                print(f"  - 分辨率: {width}x{height}")
+                print(f"  - 帧率: {fps:.2f} fps")
+                print(f"  - 总帧数: {frame_count} 帧")
+                print(f"  - 时长: {duration:.2f} 秒")
+            else:
+                print(f"⚠️  无法读取视频文件: {args.video_out_path}")
+        else:
+            print(f"⚠️  视频文件不存在: {args.video_out_path}")
+    except ImportError:
+        print(f"⚠️  OpenCV未安装，无法获取视频详细信息")
+    except Exception as e:
+        print(f"⚠️  获取视频信息时出错: {e}")
+    
     print("=" * 60)
 
     # 清理日志文件重定向
