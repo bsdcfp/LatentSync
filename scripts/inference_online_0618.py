@@ -510,7 +510,7 @@ def setup_diycache_unet(unet, first_step_offset=1, last_step_offset=4, num_steps
         momentum_beta: Momentum更新的beta参数（当residual_update_mode='momentum'时使用）
     """
     # 添加TeaCache相关属性
-    unet.__class__.enable_diy_tcache = False
+    unet.__class__.enable_diy_tcache = True
     unet.__class__.forward = diycache_forward
     unet.__class__._compute_unet_blocks = _compute_unet_blocks
     

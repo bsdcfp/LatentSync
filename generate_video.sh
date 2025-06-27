@@ -155,7 +155,7 @@ PYTHON_CMD="python $SCRIPT_DIR/scripts/inference_online_0618.py \\
 
 # 如果启用缓存，添加--enable_diycache参数
 if [ "$ENABLE_CACHE" = "true" ]; then
-    PYTHON_CMD="$PYTHON_CMD --enable_deepcache"
+    PYTHON_CMD="$PYTHON_CMD --enable_diycache"
 fi
 
 echo "🔧 执行的Python命令："
