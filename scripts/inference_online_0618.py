@@ -106,19 +106,14 @@ def main(config, args):
     print(f"  - 输入音频路径: {args.audio_path}")
     print(f"  - 加载检查点路径: {args.inference_ckpt_path}")
 
-    scheduler = DDIMScheduler.from_pretrained("configs")
+    scheduler = DDIMScheduler.from_pretrained(args.scheduler_config_path)
 
-    if config.model.cross_attention_dim == 768:
-        whisper_model_path = args.whisper_model_path
-    elif config.model.cross_attention_dim == 384:
-        # whisper_model_path = "checkpoints/whisper/tiny.pt"
-        whisper_model_path = args.whisper_model_path
-    else:
-        raise NotImplementedError("cross_attention_dim must be 768 or 384")
+    # 直接使用命令行参数中的whisper模型路径
+    whisper_model_path = args.whisper_model_path
 
     audio_encoder = Audio2Feature(model_path=whisper_model_path, device="cuda", num_frames=config.data.num_frames)
 
-    vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse", torch_dtype=dtype)
+    vae = AutoencoderKL.from_pretrained(args.vae_model_path, torch_dtype=dtype)
     vae.config.scaling_factor = 0.18215
     vae.config.shift_factor = 0
 
@@ -487,7 +482,7 @@ def setup_diycache_unet(unet, first_step_offset=1, last_step_offset=4, num_steps
         momentum_beta: Momentum更新的beta参数（当residual_update_mode='momentum'时使用）
     """
     # 添加TeaCache相关属性
-    unet.__class__.enable_diy_tcache = True
+    unet.__class__.enable_diy_tcache = False
     unet.__class__.forward = diycache_forward
     unet.__class__._compute_unet_blocks = _compute_unet_blocks
     
@@ -511,6 +506,12 @@ if __name__ == "__main__":
     parser.add_argument("--unet_config_path", type=str, default="configs/unet.yaml")
     parser.add_argument("--inference_ckpt_path", type=str, required=True)
     parser.add_argument("--whisper_model_path", type=str, default="checkpoints/whisper/tiny.pt")
+    
+    # SD模型路径参数
+    parser.add_argument("--vae_model_path", type=str, default="stabilityai/sd-vae-ft-mse",
+                       help="VAE模型路径，可以是HuggingFace模型ID或本地路径")
+    parser.add_argument("--scheduler_config_path", type=str, default="configs",
+                       help="调度器配置路径")
     
     # 输入输出参数
     parser.add_argument("--audio_path", type=str, required=True, help="输入音频路径")
