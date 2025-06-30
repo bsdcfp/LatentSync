@@ -36,7 +36,8 @@ class Audio2Feature:
         right_idx = center_idx + (audio_feat_length[1] + 1) * 2
 
         for idx in range(left_idx, right_idx):
-            idx = max(0, idx)
+            # idx = max(0, idx)
+            idx = max(1, idx)
             idx = min(length - 1, idx)
             x = feature_array[idx]
             selected_feature.append(x)

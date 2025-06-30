@@ -41,7 +41,8 @@ AUDIO_PATH="$AUXILIARY_DIR/input_example/beauty_v2_20s.MP3"
 # 输出两个：视频输出路径 + mask输出路径
 # OUTPUT_DIR="/home/work/hy_01/outputs/online_mode_test_0624_20s_final"
 # OUTPUT_DIR="$AUXILIARY_DIR/outputs/online_mode_test_0624_20s_final"
-OUTPUT_DIR="$SCRIPT_DIR/outputs/online_mode_test_0624_20s_final"
+# OUTPUT_DIR="$SCRIPT_DIR/outputs/online_mode_test_0624_20s_final_teacache"
+OUTPUT_DIR="$SCRIPT_DIR/outputs/online_mode_test_0624_20s_final_diycache"
 
 mkdir -p "$OUTPUT_DIR"
 VIDEO_OUT_PATH="$OUTPUT_DIR/generated_video_$(date +%Y%m%d_%H%M%S).mp4"

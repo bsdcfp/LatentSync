@@ -339,7 +339,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
 
     # @torch.no_grad()
     @torch.no_grad()
-    # @profile
+    #@profile
     def generate_video_online_0618(
         self,
         video_cache_dir: str ,
@@ -359,8 +359,9 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
-        debug=False,  # 新增debug参数
         need_padding_to_16x=True,
+        convert_auido_to_48k=True,
+        debug=False,  # 新增debug参数
         **kwargs,
     ):
         time_begin = time.time()
@@ -372,9 +373,12 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
         device = self._execution_device
         self.set_progress_bar_config(desc=f"Sample frames: {num_frames}")
         
+        # 获取音频时长
+        audio_samples, audio_duration = read_audio(audio_path, return_duration=True)
+        print(f"音频时长: {audio_duration} 秒")
 
         # 获取视频索引列表
-        video_index_list = self.video_index_generator.get_video_index(audio_path)
+        video_index_list = self.video_index_generator.get_video_index(audio_path, audio_duration=audio_duration)
 
         if debug:
             print(f"video_index_list: {video_index_list}")
@@ -388,8 +392,6 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
         else:
             pass
 
-        audio_samples = read_audio(audio_path)
-        
         # 通过video_index_list加载视频帧和特征
         faces, original_video_frames, boxes, affine_matrices, mask_frames = self._load_video_and_mask_data_from_index_list(
             video_index_list, device, video_cache_dir, mask_base_dir if mask_output_path is not None else None, debug=debug
@@ -561,11 +563,12 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                     latent_model_input = torch.cat(
                         [latent_model_input, mask_latents, masked_image_latents, image_latents], dim=1
                     )
-
                     # predict the noise residual
                     if debug:
                         unet_start_time = time.time()
+                    # print(f"num_inference_steps: {num_inference_steps}, latent_model_input: {latent_model_input.shape}, latent_model_input.dtype: {latent_model_input.dtype}, t: {t}, audio_embeds: {audio_embeds.shape}, audio_embeds.dtype: {audio_embeds.dtype}")
                     noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=audio_embeds).sample
+                    # print(f"noise_pred: {noise_pred.shape}, noise_pred.dtype: {noise_pred.dtype}")
                     if debug:
                         unet_time = time.time() - unet_start_time
                         total_unet_time += unet_time
@@ -583,7 +586,6 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                         progress_bar.update()
                         if callback is not None and j % callback_steps == 0:
                             callback(j, t, latents)
-
             if debug:
                 denoising_total_time = time.time() - denoising_start_time
 
@@ -604,19 +606,15 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
             overall_avg_unet_time = total_batch_unet_time / (num_inferences * num_inference_steps)
             print(f"🎯 所有批次统计: 共{num_inferences}个批次, 总去噪耗时={total_batch_denoising_time:.3f}s, 总UNet推理耗时={total_batch_unet_time:.3f}s, 平均去噪耗时={overall_avg_denoising_time:.3f}s, 平均UNet推理耗时={overall_avg_unet_time:.3f}s")
 
-        # if padding_frames != 0:
-            # 计算实际需要保留的帧数（去掉补零的部分）
-            # keep_frame_num = gen_frame_num - padding_frames
-        # if debug:
-        #     print(f"synced_video_frames: {len(synced_video_frames)}, synced_video_frames[0].shape: {synced_video_frames[0].shape}, original_faces_len: {original_faces_len}")
-        # original_frames = len(whisper_feature) // (audio_sample_rate // video_fps)
         synced_video_frames = torch.cat(synced_video_frames)
         # if debug:
-        print(f"synced_video_frames: {len(synced_video_frames)}, original_video_frames: {len(original_video_frames)}, boxes: {len(boxes)}, affine_matrices: {len(affine_matrices)}, original_faces_len: {original_faces_len}")
+        # print(f"synced_video_frames: {len(synced_video_frames)}, original_video_frames: {len(original_video_frames)}, boxes: {len(boxes)}, affine_matrices: {len(affine_matrices)}, original_faces_len: {original_faces_len}")
         synced_video_frames = synced_video_frames[:original_faces_len]
+        # print(f"synced_video_frames: {synced_video_frames[0].shape} {synced_video_frames[0].dtype}, original_video_frames: {original_video_frames[0].shape} {original_video_frames[0].dtype}")
         synced_video_frames = self.restore_video_torch_simple(
             synced_video_frames, original_video_frames, boxes, affine_matrices
         )
+        # print(f"synced_video_frames: {synced_video_frames[0].shape} {synced_video_frames[0].dtype}")
 
         audio_samples_remain_length = int(synced_video_frames.shape[0] / video_fps * audio_sample_rate)
         audio_samples = audio_samples[:audio_samples_remain_length].cpu().numpy()
@@ -632,12 +630,40 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
             # 保存到临时文件
             write_video(temp_video_path, synced_video_frames, fps=video_fps) # 保存视频帧 video_fps=25
             sf.write(temp_audio_path, audio_samples, audio_sample_rate)
-            
+
+            if convert_auido_to_48k: 
+                temp_converted_audio_path = os.path.join(temp_dir, "audio_converted.wav")
+                cmd = [
+                    'ffmpeg', '-i', temp_audio_path,
+                    '-acodec', 'pcm_s16le',  # 16比特PCM编码
+                    '-ar', '48000',  # 48kHz采样率
+                    '-ac', '2',  # 双声道
+                    '-y',  # 覆盖输出文件
+                    temp_converted_audio_path
+                ]
+
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                print(f"✅ 48khz音频转换完成: {temp_converted_audio_path}")
+                temp_audio_path = temp_converted_audio_path
+
+
             # 确保输出目录存在
             os.makedirs(os.path.dirname(os.path.abspath(video_out_path)), exist_ok=True)
             
             # 使用ffmpeg命令合并（最可靠的方法）
-            command = f"ffmpeg -y -loglevel error -nostdin -i {temp_video_path} -i {temp_audio_path} -c:v libx264 -c:a aac -q:v 0 -q:a 0 {video_out_path}"
+            if convert_auido_to_48k:
+                # 根据输出文件扩展名选择合适的音频编码
+                output_ext = os.path.splitext(video_out_path)[1].lower()
+                if output_ext in ['.mkv', '.avi', '.mov']:
+                    # 这些容器支持PCM，保持16比特PCM音频格式
+                    command = f"ffmpeg -y -loglevel error -nostdin -i {temp_video_path} -i {temp_audio_path} -c:v libx264 -c:a pcm_s16le -ar 48000 -ac 2 -q:v 0 {video_out_path}"
+                else:
+                    # MP4等容器不支持PCM，使用高质量AAC但保持48kHz双声道
+                    command = f"ffmpeg -y -loglevel error -nostdin -i {temp_video_path} -i {temp_audio_path} -c:v libx264 -c:a aac -ar 48000 -ac 2 -b:a 256k -q:v 0 {video_out_path}"
+                    print(f"⚠️  注意: {output_ext}容器不支持16比特PCM格式，使用高质量AAC (48kHz双声道256kbps)")
+            else:
+                # 使用AAC编码
+                command = f"ffmpeg -y -loglevel error -nostdin -i {temp_video_path} -i {temp_audio_path} -c:v libx264 -c:a aac -q:v 0 -q:a 0 {video_out_path}"
             subprocess.run(command, shell=True)
             
         # 如果需要输出mask视频，直接保存到目标位置
@@ -735,9 +761,10 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                 if debug:
                     print(f"⚠️  警告: 视频文件不存在: {video_path}")
                 continue
-                
-            original_video_frames = read_video(video_path, use_decord=False, change_fps=False)
             
+            original_video_frames = read_video(video_path, use_decord=False, change_fps=False)
+            # print(f"video_path: {video_path}: len original_video_frames: {len(original_video_frames)}, original_video_frames[0].shape: {original_video_frames[0].shape}, original_video_frames[0].dtype: {original_video_frames[0].dtype}")
+
             # 3. 如果需要加载mask视频
             mask_video_frames = None
             if mask_base_dir is not None:
@@ -748,6 +775,8 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                     if debug:
                         print(f"🎭 读取mask视频帧: {mask_video_path}")
                     mask_video_frames = read_video(mask_video_path, use_decord=False, change_fps=False)
+                    # print(f"mask_video_path: {mask_video_path}: len mask_video_frames: {len(mask_video_frames)}, mask_video_frames[0].shape: {mask_video_frames[0].shape}, mask_video_frames[0].dtype: {mask_video_frames[0].dtype}")
+
                 else:
                     # if debug:
                     print(f"⚠️  警告: mask视频文件不存在: {mask_video_path}")

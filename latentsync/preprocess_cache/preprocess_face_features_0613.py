@@ -58,6 +58,8 @@ def preprocess_and_save_features(config, args):
 
     video_files = glob.glob(os.path.join(args.input_dir, "*.mp4"))
     print(f"共找到{len(video_files)}个视频文件。")
+    print(f"video_files: {video_files}")
+    # exit(0)
     if args.max_videos != -1:
         video_files = video_files[:args.max_videos]
         print(f"只处理前{args.max_videos}个视频。")

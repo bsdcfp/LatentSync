@@ -625,6 +625,7 @@ class VideoIndexGenerator:
         # 初始化视频合并器
         self.video_merger = VideoSequenceMerger(target_fps, transition_frames, debug)
     
+    # @profile
     def get_video_index(self, audio_path, audio_duration=None, output_path=None):
         """
         根据音频路径生成视频索引
@@ -646,8 +647,8 @@ class VideoIndexGenerator:
         if audio_duration is None:
             audio_duration = self.video_merger.get_audio_duration(audio_path)
             
-        if self.debug:
-            print(f"音频时长: {audio_duration:.2f} 秒")
+        # if self.debug:
+            print(f"音频时长: {audio_duration} 秒")
 
         video_names_list = self.video_selector.get_video_name_list(audio_duration)
         

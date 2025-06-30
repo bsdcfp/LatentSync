@@ -333,7 +333,7 @@ def read_video_cv2_with_specific_frames(video_path: str, gen_frame_num=-1, start
     # return np.array(frames)
 
 
-def read_audio(audio_path: str, audio_sample_rate: int = 16000):
+def read_audio(audio_path: str, audio_sample_rate: int = 16000, return_duration: bool = False):
     if audio_path is None:
         raise ValueError("Audio path is required.")
     ar = AudioReader(audio_path, sample_rate=audio_sample_rate, mono=True)
@@ -341,7 +341,15 @@ def read_audio(audio_path: str, audio_sample_rate: int = 16000):
     # To access the audio samples
     audio_samples = torch.from_numpy(ar[:].asnumpy())
     audio_samples = audio_samples.squeeze(0)
-
+    
+    if return_duration:
+        # 计算音频时长
+        audio_duration = len(audio_samples) / audio_sample_rate
+        # print(f"🎵 音频文件: {audio_path}")
+        # print(f"   样本数: {len(audio_samples):,} 个")
+        # print(f"   采样率: {audio_sample_rate} Hz")  
+        # print(f"   时长: {audio_duration:.2f} 秒 ({audio_duration/60:.2f} 分钟)")
+        return audio_samples, audio_duration
     return audio_samples
 
 

@@ -19,6 +19,7 @@ wandb/
 *debug*
 /debug
 /output
+/outputs
 /validation
 /test
 /models/
