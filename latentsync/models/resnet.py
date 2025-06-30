@@ -5,9 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from einops import rearrange
-
+from simpleprofiler.profiler import NVTXContext
 
 class InflatedConv3d(nn.Conv2d):
+    @NVTXContext
     def forward(self, x):
         video_length = x.shape[2]
 
@@ -19,6 +20,7 @@ class InflatedConv3d(nn.Conv2d):
 
 
 class InflatedGroupNorm(nn.GroupNorm):
+    @NVTXContext
     def forward(self, x):
         video_length = x.shape[2]
 
@@ -44,6 +46,7 @@ class Upsample3D(nn.Module):
         elif use_conv:
             self.conv = InflatedConv3d(self.channels, self.out_channels, 3, padding=1)
 
+    @NVTXContext
     def forward(self, hidden_states, output_size=None):
         assert hidden_states.shape[1] == self.channels
 
@@ -95,6 +98,7 @@ class Downsample3D(nn.Module):
         else:
             raise NotImplementedError
 
+    @NVTXContext
     def forward(self, hidden_states):
         assert hidden_states.shape[1] == self.channels
         if self.use_conv and self.padding == 0:
@@ -185,6 +189,7 @@ class ResnetBlock3D(nn.Module):
         if self.use_in_shortcut:
             self.conv_shortcut = InflatedConv3d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
+    @NVTXContext
     def forward(self, input_tensor, temb):
         hidden_states = input_tensor
 
@@ -230,5 +235,6 @@ class ResnetBlock3D(nn.Module):
 
 
 class Mish(torch.nn.Module):
+    @NVTXContext
     def forward(self, hidden_states):
         return hidden_states * torch.tanh(torch.nn.functional.softplus(hidden_states))

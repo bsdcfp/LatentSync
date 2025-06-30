@@ -20,6 +20,7 @@ import argparse
 import json
 import random
 import time
+from simpleprofiler.profiler import NVTXContext
 
 
 class VideoSelectedInfo:
@@ -626,6 +627,7 @@ class VideoIndexGenerator:
         self.video_merger = VideoSequenceMerger(target_fps, transition_frames, debug)
     
     # @profile
+    @NVTXContext
     def get_video_index(self, audio_path, audio_duration=None, output_path=None):
         """
         根据音频路径生成视频索引

@@ -125,6 +125,26 @@ def main(config, args):
 
     unet = unet.to(dtype=dtype)
 
+    # ===== 打印模型参数量和大小 =====
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    def print_model_size(model, name="model"):
+        total_params = count_parameters(model)
+        size_mb = total_params * 4 / 1024 / 1024  # float32
+        size_gb = total_params * 4 / 1024 / 1024 / 1024
+        print(f"{name} 参数量: {total_params:,} ({total_params/1e6:.2f}M, {total_params/1e9:.3f}B), 估算大小: {size_mb:.2f}MB ({size_gb:.3f}GB)")
+
+    print("================ 模型参数统计 ================")
+    print_model_size(vae, "VAE")
+    print_model_size(unet, "LatentSync UNet")
+    # audio_encoder 可能有 model 属性
+    if hasattr(audio_encoder, 'model'):
+        print_model_size(audio_encoder.model, "Whisper")
+    else:
+        print("Whisper: 未找到 model 属性，无法统计参数")
+    print("=============================================")
+
     # set xformers
     if is_xformers_available():
         print(f"Xformers is available, enabling xformers memory efficient attention")

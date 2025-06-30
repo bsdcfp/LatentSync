@@ -27,7 +27,7 @@ from .resnet import InflatedConv3d, InflatedGroupNorm
 from ..utils.util import zero_rank_log
 from einops import rearrange
 from .utils import zero_module
-
+from simpleprofiler.profiler import NVTXContext
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -326,6 +326,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin):
         if isinstance(module, (CrossAttnDownBlock3D, DownBlock3D, CrossAttnUpBlock3D, UpBlock3D)):
             module.gradient_checkpointing = value
 
+    @NVTXContext
     def forward(
         self,
         sample: torch.FloatTensor,

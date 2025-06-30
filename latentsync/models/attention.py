@@ -16,7 +16,7 @@ from diffusers.models.attention import CrossAttention, FeedForward, AdaLayerNorm
 
 from einops import rearrange, repeat
 from .utils import zero_module
-
+from simpleprofiler.profiler import NVTXContext
 
 @dataclass
 class Transformer3DModelOutput(BaseOutput):
@@ -126,6 +126,7 @@ class Transformer3DModel(ModelMixin, ConfigMixin):
         if custom_audio_layer:
             self.proj_out = zero_module(self.proj_out)
 
+    @NVTXContext
     def forward(self, hidden_states, encoder_hidden_states=None, timestep=None, return_dict: bool = True):
         # Input
         assert hidden_states.dim() == 5, f"Expected hidden_states to have ndim=5, but got ndim={hidden_states.dim()}."
@@ -282,6 +283,7 @@ class BasicTransformerBlock(nn.Module):
                 )
             # self.attn_temp._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
 
+    @NVTXContext
     def forward(
         self, hidden_states, encoder_hidden_states=None, timestep=None, attention_mask=None, video_length=None
     ):
@@ -415,6 +417,7 @@ class AudioTransformerBlock(nn.Module):
                 )
             # self.attn_temp._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
 
+    @NVTXContext
     def forward(
         self, hidden_states, encoder_hidden_states=None, timestep=None, attention_mask=None, video_length=None
     ):
@@ -476,6 +479,7 @@ class AudioCrossAttn(nn.Module):
         self.zero_proj_out = zero_proj_out
         self.use_ada_layer_norm = use_ada_layer_norm
 
+    @NVTXContext
     def forward(self, hidden_states, encoder_hidden_states=None, timestep=None, attention_mask=None):
         previous_hidden_states = hidden_states
         hidden_states = self.norm(hidden_states, timestep) if self.use_ada_layer_norm else self.norm(hidden_states)

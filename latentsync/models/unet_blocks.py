@@ -6,8 +6,9 @@ from torch import nn
 from .attention import Transformer3DModel
 from .resnet import Downsample3D, ResnetBlock3D, Upsample3D
 from .motion_module import get_motion_module
+from simpleprofiler.profiler import NVTXContext
 
-
+@NVTXContext
 def get_down_block(
     down_block_type,
     num_layers,
@@ -86,7 +87,7 @@ def get_down_block(
         )
     raise ValueError(f"{down_block_type} does not exist.")
 
-
+@NVTXContext
 def get_up_block(
     up_block_type,
     num_layers,
@@ -290,6 +291,7 @@ class UNetMidBlock3DCrossAttn(nn.Module):
         self.resnets = nn.ModuleList(resnets)
         self.motion_modules = nn.ModuleList(motion_modules)
 
+    @NVTXContext
     def forward(self, hidden_states, temb=None, encoder_hidden_states=None, attention_mask=None):
         hidden_states = self.resnets[0](hidden_states, temb)
         for attn, audio_attn, resnet, motion_module in zip(
@@ -438,6 +440,7 @@ class CrossAttnDownBlock3D(nn.Module):
 
         self.gradient_checkpointing = False
 
+    @NVTXContext
     def forward(self, hidden_states, temb=None, encoder_hidden_states=None, attention_mask=None):
         output_states = ()
 
@@ -565,6 +568,7 @@ class DownBlock3D(nn.Module):
 
         self.gradient_checkpointing = False
 
+    @NVTXContext
     def forward(self, hidden_states, temb=None, encoder_hidden_states=None):
         output_states = ()
 
@@ -729,6 +733,7 @@ class CrossAttnUpBlock3D(nn.Module):
 
         self.gradient_checkpointing = False
 
+    @NVTXContext
     def forward(
         self,
         hidden_states,
@@ -858,6 +863,7 @@ class UpBlock3D(nn.Module):
 
         self.gradient_checkpointing = False
 
+    @NVTXContext
     def forward(
         self,
         hidden_states,

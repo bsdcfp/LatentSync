@@ -47,6 +47,7 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 import tempfile
 # import sys
 # import types
+from simpleprofiler.profiler import NVTXContext
 
 class LipsyncPipeline_online_0618(DiffusionPipeline):
     _optional_components = []
@@ -208,6 +209,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                 f" {type(callback_steps)}."
             )
 
+    @NVTXContext
     def prepare_latents(self, batch_size, num_frames, num_channels_latents, height, width, dtype, device, generator):
         shape = (
             batch_size,
@@ -322,6 +324,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
     #         out_frames.append(out_frame)
     #     return np.stack(out_frames, axis=0)
 
+    @NVTXContext
     def restore_video_torch_simple(self, faces, video_frames, boxes, affine_matrices): # original_version
         video_frames = video_frames[: faces.shape[0]]
         out_frames = []
@@ -340,6 +343,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
     # @torch.no_grad()
     @torch.no_grad()
     #@profile
+    @NVTXContext
     def generate_video_online_0618(
         self,
         video_cache_dir: str ,
@@ -374,7 +378,8 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
         self.set_progress_bar_config(desc=f"Sample frames: {num_frames}")
         
         # 获取音频时长
-        audio_samples, audio_duration = read_audio(audio_path, return_duration=True)
+        with NVTXContext(f"{self.__class__.__qualname__}.read_audio"):
+                audio_samples, audio_duration = read_audio(audio_path, return_duration=True)
         print(f"音频时长: {audio_duration} 秒")
 
         # 获取视频索引列表
@@ -429,63 +434,64 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
 
         self.video_fps = video_fps
 
-        padding_frames = 0
-        if self.unet.add_audio_layer:
-            whisper_feature = self.audio_encoder.audio2feat(audio_path)
-            whisper_chunks = self.audio_encoder.feature2chunks(feature_array=whisper_feature, fps=video_fps)
-            if need_padding_to_16x:
-                # 计算需要补齐的帧数
-                original_audio_len = len(whisper_chunks)
-                remainder = original_audio_len % num_frames
-                padding_frames = (num_frames - remainder) % num_frames # 0-15
-                if debug:
-                    print(f"original_audio_len: {original_audio_len}, remainder: {remainder}, padding_frames: {padding_frames}")
-                if padding_frames != 0:
-                    # 创建补零的tensor
-                    # padding_audio_tensor = torch.zeros_like(whisper_chunks[0]).unsqueeze(0).repeat(padding_frames, 1)
-                    padding_method = "last_frame_padding"
-                    if padding_method == "zero_padding":
-                    # method1
-                        padding_audio_tensor = [torch.zeros_like(whisper_chunks[0]) for _ in range(padding_frames)]
-                    # method2
-                    elif padding_method == "last_frame_padding":
-                        padding_audio_tensor = [whisper_chunks[-1]] * padding_frames
-                    else:
-                        raise NotImplementedError(f"padding_method {padding_method} not implemented!")
-                    # 将补零的tensor添加到原始chunks中
-                    # whisper_chunks = torch.cat([whisper_chunks, padding_audio_tensor], dim=0)
-                    whisper_chunks += padding_audio_tensor
+        with NVTXContext(f"{self.__class__.__qualname__}.prepare_audio_chunks"):
+            padding_frames = 0
+            if self.unet.add_audio_layer:
+                whisper_feature = self.audio_encoder.audio2feat(audio_path)
+                whisper_chunks = self.audio_encoder.feature2chunks(feature_array=whisper_feature, fps=video_fps)
+                if need_padding_to_16x:
+                    # 计算需要补齐的帧数
+                    original_audio_len = len(whisper_chunks)
+                    remainder = original_audio_len % num_frames
+                    padding_frames = (num_frames - remainder) % num_frames # 0-15
+                    if debug:
+                        print(f"original_audio_len: {original_audio_len}, remainder: {remainder}, padding_frames: {padding_frames}")
+                    if padding_frames != 0:
+                        # 创建补零的tensor
+                        # padding_audio_tensor = torch.zeros_like(whisper_chunks[0]).unsqueeze(0).repeat(padding_frames, 1)
+                        padding_method = "last_frame_padding"
+                        if padding_method == "zero_padding":
+                        # method1
+                            padding_audio_tensor = [torch.zeros_like(whisper_chunks[0]) for _ in range(padding_frames)]
+                        # method2
+                        elif padding_method == "last_frame_padding":
+                            padding_audio_tensor = [whisper_chunks[-1]] * padding_frames
+                        else:
+                            raise NotImplementedError(f"padding_method {padding_method} not implemented!")
+                        # 将补零的tensor添加到原始chunks中
+                        # whisper_chunks = torch.cat([whisper_chunks, padding_audio_tensor], dim=0)
+                        whisper_chunks += padding_audio_tensor
 
-                # 确保无论是否需要padding都定义num_inferences
-                num_inferences = len(whisper_chunks) // num_frames
-                faces_len = len(faces)
-                required_frames = num_inferences * num_frames
-                
-                if faces_len >= required_frames:
-                    # 如果faces够长，直接截取
-                    faces = faces[:required_frames]
-                    if debug:
-                        print(f"faces足够长，截取到{required_frames}帧")
+                    # 确保无论是否需要padding都定义num_inferences
+                    num_inferences = len(whisper_chunks) // num_frames
+                    faces_len = len(faces)
+                    required_frames = num_inferences * num_frames
+                    
+                    if faces_len >= required_frames:
+                        # 如果faces够长，直接截取
+                        faces = faces[:required_frames]
+                        if debug:
+                            print(f"faces足够长，截取到{required_frames}帧")
+                    else:
+                        # 如果faces不够长，需要做padding
+                        faces_padding_needed = required_frames - faces_len
+                        if debug:
+                            print(f"faces不够长: faces_len={faces_len}, required_frames={required_frames}, 需要padding {faces_padding_needed}帧")
+                        
+                        # 使用最后一帧重复填充的方式进行padding
+                        face_last_frame = faces[-1:] if faces_len > 0 else faces[:1]  # 获取最后一帧，保持维度
+                        faces_padding_frames = face_last_frame.repeat(faces_padding_needed, 1, 1, 1)  # 重复最后一帧
+                        faces = torch.cat([faces, faces_padding_frames], dim=0)
+                        
+                        if debug:
+                            print(f"完成faces padding，最终形状: {faces.shape}")
                 else:
-                    # 如果faces不够长，需要做padding
-                    faces_padding_needed = required_frames - faces_len
-                    if debug:
-                        print(f"faces不够长: faces_len={faces_len}, required_frames={required_frames}, 需要padding {faces_padding_needed}帧")
-                    
-                    # 使用最后一帧重复填充的方式进行padding
-                    face_last_frame = faces[-1:] if faces_len > 0 else faces[:1]  # 获取最后一帧，保持维度
-                    faces_padding_frames = face_last_frame.repeat(faces_padding_needed, 1, 1, 1)  # 重复最后一帧
-                    faces = torch.cat([faces, faces_padding_frames], dim=0)
-                    
-                    if debug:
-                        print(f"完成faces padding，最终形状: {faces.shape}")
+                    num_inferences = min(len(faces), len(whisper_chunks)) // num_frames
+                    faces = faces[:num_inferences * num_frames]
+                
             else:
-                num_inferences = min(len(faces), len(whisper_chunks)) // num_frames
+                num_inferences = len(faces) // num_frames
                 faces = faces[:num_inferences * num_frames]
-            
-        else:
-            num_inferences = len(faces) // num_frames
-            faces = faces[:num_inferences * num_frames]
         
         # faces = faces[:num_inferences * num_frames]
         gen_frame_num = num_inferences * num_frames
@@ -513,92 +519,93 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
             total_batch_unet_time = 0.0
 
         for i in tqdm.tqdm(range(num_inferences), desc="Doing inference..."):
-            if self.unet.add_audio_layer:
-                audio_embeds = torch.stack(whisper_chunks[i * num_frames : (i + 1) * num_frames])
-                audio_embeds = audio_embeds.to(device, dtype=weight_dtype)
-                if do_classifier_free_guidance:
-                    null_audio_embeds = torch.zeros_like(audio_embeds)
-                    audio_embeds = torch.cat([null_audio_embeds, audio_embeds])
-            else:
-                audio_embeds = None
-            inference_faces = faces[i * num_frames : (i + 1) * num_frames]
-            latents = all_latents[:, :, i * num_frames : (i + 1) * num_frames]
-            pixel_values, masked_pixel_values, masks = self.image_processor.prepare_masks_and_masked_images(
-                inference_faces, affine_transform=False
-            )
-
-            # 7. Prepare mask latent variables
-            mask_latents, masked_image_latents = self.prepare_mask_latents(
-                masks,
-                masked_pixel_values,
-                height,
-                width,
-                weight_dtype,
-                device,
-                generator,
-                do_classifier_free_guidance,
-            )
-
-            # 8. Prepare image latents
-            image_latents = self.prepare_image_latents(
-                pixel_values,
-                device,
-                weight_dtype,
-                generator,
-                do_classifier_free_guidance,
-            )
-
-            # 9. Denoising loop
-            denoising_start_time = time.time()
-            total_unet_time = 0.0
-            num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
-            with self.progress_bar(total=num_inference_steps) as progress_bar:
-                for j, t in enumerate(timesteps):
-                    
-                    # expand the latents if we are doing classifier free guidance
-                    latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
-
-                    # concat latents, mask, masked_image_latents in the channel dimension
-                    latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
-                    latent_model_input = torch.cat(
-                        [latent_model_input, mask_latents, masked_image_latents, image_latents], dim=1
-                    )
-                    # predict the noise residual
-                    if debug:
-                        unet_start_time = time.time()
-                    # print(f"num_inference_steps: {num_inference_steps}, latent_model_input: {latent_model_input.shape}, latent_model_input.dtype: {latent_model_input.dtype}, t: {t}, audio_embeds: {audio_embeds.shape}, audio_embeds.dtype: {audio_embeds.dtype}")
-                    noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=audio_embeds).sample
-                    # print(f"noise_pred: {noise_pred.shape}, noise_pred.dtype: {noise_pred.dtype}")
-                    if debug:
-                        unet_time = time.time() - unet_start_time
-                        total_unet_time += unet_time
-
-                    # perform guidance
+            with NVTXContext(f"{self.__class__.__qualname__}.doing_inference_{i}"):
+                if self.unet.add_audio_layer:
+                    audio_embeds = torch.stack(whisper_chunks[i * num_frames : (i + 1) * num_frames])
+                    audio_embeds = audio_embeds.to(device, dtype=weight_dtype)
                     if do_classifier_free_guidance:
-                        noise_pred_uncond, noise_pred_audio = noise_pred.chunk(2)
-                        noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_audio - noise_pred_uncond)
+                        null_audio_embeds = torch.zeros_like(audio_embeds)
+                        audio_embeds = torch.cat([null_audio_embeds, audio_embeds])
+                else:
+                    audio_embeds = None
+                inference_faces = faces[i * num_frames : (i + 1) * num_frames]
+                latents = all_latents[:, :, i * num_frames : (i + 1) * num_frames]
+                pixel_values, masked_pixel_values, masks = self.image_processor.prepare_masks_and_masked_images(
+                    inference_faces, affine_transform=False
+                )
 
-                    # compute the previous noisy sample x_t -> x_t-1
-                    latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
-                    
-                    # call the callback, if provided
-                    if j == len(timesteps) - 1 or ((j + 1) > num_warmup_steps and (j + 1) % self.scheduler.order == 0):
-                        progress_bar.update()
-                        if callback is not None and j % callback_steps == 0:
-                            callback(j, t, latents)
-            if debug:
-                denoising_total_time = time.time() - denoising_start_time
+                # 7. Prepare mask latent variables
+                mask_latents, masked_image_latents = self.prepare_mask_latents(
+                    masks,
+                    masked_pixel_values,
+                    height,
+                    width,
+                    weight_dtype,
+                    device,
+                    generator,
+                    do_classifier_free_guidance,
+                )
 
-                # 累积到总体统计
-                total_batch_denoising_time += denoising_total_time
-                total_batch_unet_time += total_unet_time
+                # 8. Prepare image latents
+                image_latents = self.prepare_image_latents(
+                    pixel_values,
+                    device,
+                    weight_dtype,
+                    generator,
+                    do_classifier_free_guidance,
+                )
 
-            # Recover the pixel values
-            decoded_latents = self.decode_latents(latents)
-            decoded_latents = self.paste_surrounding_pixels_back(
-                decoded_latents, pixel_values, 1 - masks, device, weight_dtype
-            )
-            synced_video_frames.append(decoded_latents)
+                # 9. Denoising loop
+                denoising_start_time = time.time()
+                total_unet_time = 0.0
+                num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
+                with self.progress_bar(total=num_inference_steps) as progress_bar:
+                    for j, t in enumerate(timesteps):
+                        
+                        # expand the latents if we are doing classifier free guidance
+                        latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+
+                        # concat latents, mask, masked_image_latents in the channel dimension
+                        latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                        latent_model_input = torch.cat(
+                            [latent_model_input, mask_latents, masked_image_latents, image_latents], dim=1
+                        )
+                        # predict the noise residual
+                        if debug:
+                            unet_start_time = time.time()
+                        # print(f"num_inference_steps: {num_inference_steps}, latent_model_input: {latent_model_input.shape}, latent_model_input.dtype: {latent_model_input.dtype}, t: {t}, audio_embeds: {audio_embeds.shape}, audio_embeds.dtype: {audio_embeds.dtype}")
+                        noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=audio_embeds).sample
+                        # print(f"noise_pred: {noise_pred.shape}, noise_pred.dtype: {noise_pred.dtype}")
+                        if debug:
+                            unet_time = time.time() - unet_start_time
+                            total_unet_time += unet_time
+
+                        # perform guidance
+                        if do_classifier_free_guidance:
+                            noise_pred_uncond, noise_pred_audio = noise_pred.chunk(2)
+                            noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_audio - noise_pred_uncond)
+
+                        # compute the previous noisy sample x_t -> x_t-1
+                        latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+                        
+                        # call the callback, if provided
+                        if j == len(timesteps) - 1 or ((j + 1) > num_warmup_steps and (j + 1) % self.scheduler.order == 0):
+                            progress_bar.update()
+                            if callback is not None and j % callback_steps == 0:
+                                callback(j, t, latents)
+                if debug:
+                    denoising_total_time = time.time() - denoising_start_time
+
+                    # 累积到总体统计
+                    total_batch_denoising_time += denoising_total_time
+                    total_batch_unet_time += total_unet_time
+
+                # Recover the pixel values
+                decoded_latents = self.decode_latents(latents)
+                decoded_latents = self.paste_surrounding_pixels_back(
+                    decoded_latents, pixel_values, 1 - masks, device, weight_dtype
+                )
+                synced_video_frames.append(decoded_latents)
 
         # 打印所有批次的总体统计
         if num_inferences > 0 and debug:
@@ -684,10 +691,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
         print(f"🎉 视频生成完成，耗时: {time_end - time_begin:.2f}s, 音频模板：{audio_path}")
         return gen_frame_num, video_index_list
 
-
-
-
-
+    @NVTXContext
     def _load_video_and_mask_data_from_index_list(self, video_index_list: List[dict], device, video_cache_dir = "/home/work/hy_01/templates/0612_online_templete_female_32fps_features", mask_base_dir: str = None, debug=False):
         """
         根据视频索引列表加载视频帧和特征数据
