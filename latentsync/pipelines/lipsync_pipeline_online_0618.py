@@ -226,6 +226,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
+    @NVTXContext
     def prepare_mask_latents(
         self, mask, masked_image, height, width, dtype, device, generator, do_classifier_free_guidance
     ):
@@ -255,6 +256,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
         )
         return mask, masked_image_latents
 
+    @NVTXContext
     def prepare_image_latents(self, images, device, dtype, generator, do_classifier_free_guidance):
         images = images.to(device=device, dtype=dtype)
         image_latents = self.vae.encode(images).latent_dist.sample(generator=generator)
@@ -517,7 +519,8 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
         if debug:
             total_batch_denoising_time = 0.0
             total_batch_unet_time = 0.0
-
+        
+        inference_start_time = time.time()
         for i in tqdm.tqdm(range(num_inferences), desc="Doing inference..."):
             with NVTXContext(f"{self.__class__.__qualname__}.doing_inference_{i}"):
                 if self.unet.add_audio_layer:
@@ -606,6 +609,8 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                     decoded_latents, pixel_values, 1 - masks, device, weight_dtype
                 )
                 synced_video_frames.append(decoded_latents)
+        inference_end_time = time.time()
+        print(f"🎯 推理耗时: {inference_end_time - inference_start_time:.3f}s")
 
         # 打印所有批次的总体统计
         if num_inferences > 0 and debug:
