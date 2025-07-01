@@ -114,6 +114,8 @@ def main(config, args):
     audio_encoder = Audio2Feature(model_path=whisper_model_path, device="cuda", num_frames=config.data.num_frames)
 
     vae = AutoencoderKL.from_pretrained(args.vae_model_path, torch_dtype=dtype)
+    vae = vae.to("cuda")
+    # vae = torch.compile(vae,  mode="max-autotune-no-cudagraphs")
     vae.config.scaling_factor = 0.18215
     vae.config.shift_factor = 0
 
@@ -122,8 +124,12 @@ def main(config, args):
         args.inference_ckpt_path,  # load checkpoint
         device="cpu",
     )
+    unet = unet.to(dtype=dtype, device="cuda")
+    # unet = torch.compile(unet, mode="max-autotune-no-cudagraphs")
 
-    unet = unet.to(dtype=dtype)
+    # audio_encoder 可能有 model 属性
+    # if hasattr(audio_encoder, 'model'):
+    #     audio_encoder.model = torch.compile(audio_encoder.model,  mode="max-autotune-no-cudagraphs")
 
     # ===== 打印模型参数量和大小 =====
     def count_parameters(model):
@@ -146,11 +152,11 @@ def main(config, args):
     print("=============================================")
 
     # set xformers
-    if is_xformers_available():
-        print(f"Xformers is available, enabling xformers memory efficient attention")
-        unet.enable_xformers_memory_efficient_attention()
-    else:
-        print(f"Xformers is not available, skipping xformers memory efficient attention")
+    # if is_xformers_available():
+    #     print(f"Xformers is available, enabling xformers memory efficient attention")
+    #     unet.enable_xformers_memory_efficient_attention()
+    # else:
+    #     print(f"Xformers is not available, skipping xformers memory efficient attention")
 
 
     # 在线模式：使用VideoIndexGenerator + generate_video_online
@@ -216,13 +222,24 @@ def main(config, args):
 
     # 改进后的目录创建方法，自动处理已存在的情况
     os.makedirs(os.path.dirname(args.video_out_path), exist_ok=True)
-    
+    pipeline.generate_video_online_0618(
+        video_cache_dir=args.video_cache_dir,
+        audio_path=args.audio_path,
+        video_out_path=args.video_out_path,
+        mask_output_path=args.mask_output_path,
+        mask_base_dir=args.mask_base_dir,
+        num_frames=config.data.num_frames,
+        num_inference_steps=args.inference_steps,
+        guidance_scale=args.guidance_scale,
+        weight_dtype=dtype,
+        width=config.data.resolution,
+        height=config.data.resolution,
+        debug=args.debug_pipeline,
+    )
     # 记录pipeline开始时间
     print("=" * 60)
     print("🚀 开始在线视频生成...")
     start_time = time.time()
-
-    # exit(0)
     pipeline.generate_video_online_0618(
         video_cache_dir=args.video_cache_dir,
         audio_path=args.audio_path,
