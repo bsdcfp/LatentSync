@@ -8,72 +8,26 @@ from typing import Union, Tuple
 from einops import rearrange
 from simpleprofiler.profiler import NVTXContext
 
-# class InflatedConv3d(nn.Conv2d):
-#     @NVTXContext
-#     @torch.compile(mode="max-autotune-no-cudagraphs")
-#     def forward(self, x):
-#         video_length = x.shape[2]
-
-#         x = rearrange(x, "b c f h w -> (b f) c h w")
-#         x = super().forward(x)
-#         x = rearrange(x, "(b f) c h w -> b c f h w", f=video_length)
-
-#         return x
-
 class InflatedConv3d(nn.Conv2d):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
     @NVTXContext
-    @torch.compile(mode="max-autotune-no-cudagraphs")
     def forward(self, x):
-        B, C, F, H, W = x.shape
-        
-        # 使用连续内存布局优化
-        if not x.is_contiguous():
-            x = x.contiguous()
-            
-        # 使用view而不是rearrange（更快）
-        x_2d = x.view(B * F, C, H, W)
-        
-        # 卷积操作
-        x_2d = super().forward(x_2d)
-        
-        # 恢复形状
-        _, OC, OH, OW = x_2d.shape
-        return x_2d.view(B, OC, F, OH, OW)
+        video_length = x.shape[2]
 
-# class InflatedGroupNorm(nn.GroupNorm):
-#     @NVTXContext
-#     @torch.compile(mode="max-autotune-no-cudagraphs")
-#     def forward(self, x):
-#         video_length = x.shape[2]
+        x = rearrange(x, "b c f h w -> (b f) c h w")
+        x = super().forward(x)
+        x = rearrange(x, "(b f) c h w -> b c f h w", f=video_length)
 
-#         x = rearrange(x, "b c f h w -> (b f) c h w")
-#         x = super().forward(x)
-#         x = rearrange(x, "(b f) c h w -> b c f h w", f=video_length)
-
-#         return x
+        return x
 
 class InflatedGroupNorm(nn.GroupNorm):
     @NVTXContext
-    @torch.compile(mode="max-autotune-no-cudagraphs")
     def forward(self, x):
-        B, C, F, H, W = x.shape
-        
-        # 确保内存连续性
-        if not x.is_contiguous():
-            x = x.contiguous()
-        
-        # 使用view重塑：(B, C, F, H, W) -> (B*F, C, H, W)
-        x_2d = x.view(B * F, C, H, W)
-        
-        # GroupNorm操作
-        x_2d = super().forward(x_2d)
-        
-        # 恢复形状：(B*F, C, H, W) -> (B, C, F, H, W)  
-        x = x_2d.view(B, C, F, H, W)
-        
+        video_length = x.shape[2]
+
+        x = rearrange(x, "b c f h w -> (b f) c h w")
+        x = super().forward(x)
+        x = rearrange(x, "(b f) c h w -> b c f h w", f=video_length)
+
         return x
 
 class Upsample3D(nn.Module):
@@ -92,6 +46,7 @@ class Upsample3D(nn.Module):
             self.conv = InflatedConv3d(self.channels, self.out_channels, 3, padding=1)
 
     @NVTXContext
+    @torch.compile(mode="max-autotune-no-cudagraphs")
     def forward(self, hidden_states, output_size=None):
         assert hidden_states.shape[1] == self.channels
 
@@ -144,6 +99,7 @@ class Downsample3D(nn.Module):
             raise NotImplementedError
 
     @NVTXContext
+    @torch.compile(mode="max-autotune-no-cudagraphs")
     def forward(self, hidden_states):
         assert hidden_states.shape[1] == self.channels
         if self.use_conv and self.padding == 0:
@@ -235,6 +191,7 @@ class ResnetBlock3D(nn.Module):
             self.conv_shortcut = InflatedConv3d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
     @NVTXContext
+    @torch.compile(mode="max-autotune-no-cudagraphs")
     def forward(self, input_tensor, temb):
         hidden_states = input_tensor
 
