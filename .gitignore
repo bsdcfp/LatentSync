@@ -44,6 +44,8 @@ wandb/
 
 # log files
 *.log
+*.txt
+*.lprof
 
 !/latentsync/utils/mask*.png
 /checkpoints/
