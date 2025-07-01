@@ -46,7 +46,6 @@ class Upsample3D(nn.Module):
             self.conv = InflatedConv3d(self.channels, self.out_channels, 3, padding=1)
 
     @NVTXContext
-    @torch.compile(mode="max-autotune-no-cudagraphs")
     def forward(self, hidden_states, output_size=None):
         assert hidden_states.shape[1] == self.channels
 
@@ -99,7 +98,6 @@ class Downsample3D(nn.Module):
             raise NotImplementedError
 
     @NVTXContext
-    @torch.compile(mode="max-autotune-no-cudagraphs")
     def forward(self, hidden_states):
         assert hidden_states.shape[1] == self.channels
         if self.use_conv and self.padding == 0:
@@ -191,7 +189,6 @@ class ResnetBlock3D(nn.Module):
             self.conv_shortcut = InflatedConv3d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
     @NVTXContext
-    @torch.compile(mode="max-autotune-no-cudagraphs")
     def forward(self, input_tensor, temb):
         hidden_states = input_tensor
 

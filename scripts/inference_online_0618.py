@@ -67,6 +67,26 @@ class Tee:
     def close(self):
         self.file.close()
 
+import torch._dynamo.config
+
+def setup_torch_compile():
+    """配置torch.compile的全局设置"""
+
+    # 缓存大小：默认8太小，建议64-128
+    torch._dynamo.config.cache_size_limit = 64
+
+    # 错误处理：生产环境建议启用
+    torch._dynamo.config.suppress_errors = True
+
+    # 自动调优：启用更激进的优化
+    torch._dynamo.config.automatic_dynamic_shapes = True
+
+    # 日志级别（调试时使用）
+    # torch._dynamo.config.verbose = True
+    # torch._dynamo.config.log_level = 'DEBUG'
+
+    print(f"[INFO] Torch compile cache size: {torch._dynamo.config.cache_size_limit}")
+    print(f"[INFO] Torch compile suppress errors: {torch._dynamo.config.suppress_errors}")
 
 def main(config, args):
     # 设置日志输出重定向
@@ -94,7 +114,8 @@ def main(config, args):
         print(f"🎭 Mask视频输出已启用:")
         print(f"  - Mask基础目录: {args.mask_base_dir}")
         print(f"  - Mask输出路径: {args.mask_output_path}")
-
+ 
+    setup_torch_compile()
     # Check if the GPU supports float16
     is_fp16_supported = torch.cuda.is_available() and torch.cuda.get_device_capability()[0] > 7
     dtype = torch.float16 if is_fp16_supported else torch.float32
