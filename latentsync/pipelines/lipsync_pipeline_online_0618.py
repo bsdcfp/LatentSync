@@ -172,6 +172,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                 return torch.device(module._hf_hook.execution_device)
         return self.device
 
+    @NVTXContext
     def decode_latents(self, latents):
         latents = latents / self.vae.config.scaling_factor + self.vae.config.shift_factor
         latents = rearrange(latents, "b c f h w -> (b f) c h w")
@@ -272,6 +273,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
         self._progress_bar_config.update(kwargs)
 
     @staticmethod
+    @NVTXContext
     def paste_surrounding_pixels_back(decoded_latents, pixel_values, masks, device, weight_dtype):
         # Paste the surrounding pixels back, because we only want to change the mouth region
         pixel_values = pixel_values.to(device=device, dtype=weight_dtype)
@@ -563,39 +565,42 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                 total_unet_time = 0.0
                 num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
                 with self.progress_bar(total=num_inference_steps) as progress_bar:
-                    for j, t in enumerate(timesteps):
-                        
-                        # expand the latents if we are doing classifier free guidance
-                        latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+                    with NVTXContext(f"{self.__class__.__qualname__}.denoising_loop_{i}"):
+                        for j, t in enumerate(timesteps):
+                            
+                            # expand the latents if we are doing classifier free guidance
+                            latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
 
-                        # concat latents, mask, masked_image_latents in the channel dimension
-                        latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
-                        latent_model_input = torch.cat(
-                            [latent_model_input, mask_latents, masked_image_latents, image_latents], dim=1
-                        )
-                        # predict the noise residual
-                        if debug:
-                            unet_start_time = time.time()
-                        # print(f"num_inference_steps: {num_inference_steps}, latent_model_input: {latent_model_input.shape}, latent_model_input.dtype: {latent_model_input.dtype}, t: {t}, audio_embeds: {audio_embeds.shape}, audio_embeds.dtype: {audio_embeds.dtype}")
-                        noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=audio_embeds).sample
-                        # print(f"noise_pred: {noise_pred.shape}, noise_pred.dtype: {noise_pred.dtype}")
-                        if debug:
-                            unet_time = time.time() - unet_start_time
-                            total_unet_time += unet_time
+                            # concat latents, mask, masked_image_latents in the channel dimension
+                            latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                            latent_model_input = torch.cat(
+                                [latent_model_input, mask_latents, masked_image_latents, image_latents], dim=1
+                            )
+                            # predict the noise residual
+                            if debug:
+                                unet_start_time = time.time()
+                            # print(f"num_inference_steps: {num_inference_steps}, latent_model_input: {latent_model_input.shape}, latent_model_input.dtype: {latent_model_input.dtype}, t: {t}, audio_embeds: {audio_embeds.shape}, audio_embeds.dtype: {audio_embeds.dtype}")
+                            with NVTXContext(f"{self.__class__.__qualname__}.unet_forward_{i}_{j}"):
+                                noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=audio_embeds).sample
+                            # print(f"noise_pred: {noise_pred.shape}, noise_pred.dtype: {noise_pred.dtype}")
+                            if debug:
+                                unet_time = time.time() - unet_start_time
+                                total_unet_time += unet_time
 
-                        # perform guidance
-                        if do_classifier_free_guidance:
-                            noise_pred_uncond, noise_pred_audio = noise_pred.chunk(2)
-                            noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_audio - noise_pred_uncond)
+                            # perform guidance
+                            if do_classifier_free_guidance:
+                                noise_pred_uncond, noise_pred_audio = noise_pred.chunk(2)
+                                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_audio - noise_pred_uncond)
 
-                        # compute the previous noisy sample x_t -> x_t-1
-                        latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
-                        
-                        # call the callback, if provided
-                        if j == len(timesteps) - 1 or ((j + 1) > num_warmup_steps and (j + 1) % self.scheduler.order == 0):
-                            progress_bar.update()
-                            if callback is not None and j % callback_steps == 0:
-                                callback(j, t, latents)
+                            # compute the previous noisy sample x_t -> x_t-1
+                            with NVTXContext(f"{self.__class__.__qualname__}.scheduler_step_{i}_{j}"):
+                                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+                            
+                            # call the callback, if provided
+                            if j == len(timesteps) - 1 or ((j + 1) > num_warmup_steps and (j + 1) % self.scheduler.order == 0):
+                                progress_bar.update()
+                                if callback is not None and j % callback_steps == 0:
+                                    callback(j, t, latents)
                 if debug:
                     denoising_total_time = time.time() - denoising_start_time
 

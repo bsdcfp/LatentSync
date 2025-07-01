@@ -21,6 +21,7 @@ import numpy as np
 from typing import Union
 from .affine_transform_v01_0516 import AlignRestore, laplacianSmooth
 import face_alignment
+from simpleprofiler.profiler import NVTXContext
 
 """
 If you are enlarging the image, you should prefer to use INTER_LINEAR or INTER_CUBIC interpolation. If you are shrinking the image, you should prefer to use INTER_AREA interpolation.
@@ -155,6 +156,7 @@ class ImageProcessor:
         masked_pixel_values = pixel_values * self.mask_image
         return pixel_values, masked_pixel_values, self.mask_image[0:1]
 
+    @NVTXContext
     def prepare_masks_and_masked_images(self, images: Union[torch.Tensor, np.ndarray], affine_transform=False):
         if isinstance(images, np.ndarray):
             images = torch.from_numpy(images)
