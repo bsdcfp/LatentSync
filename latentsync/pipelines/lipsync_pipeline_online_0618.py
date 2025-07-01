@@ -48,6 +48,8 @@ import tempfile
 # import sys
 # import types
 from simpleprofiler.profiler import NVTXContext
+from line_profiler import profile
+
 
 class LipsyncPipeline_online_0618(DiffusionPipeline):
     _optional_components = []
@@ -346,8 +348,8 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
 
     # @torch.no_grad()
     @torch.no_grad()
-    #@profile
     @NVTXContext
+    # @profile
     def generate_video_online_0618(
         self,
         video_cache_dir: str ,
