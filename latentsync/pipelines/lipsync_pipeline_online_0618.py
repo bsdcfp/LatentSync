@@ -19,7 +19,7 @@ from packaging import version
 
 from diffusers.configuration_utils import FrozenDict
 from diffusers.models import AutoencoderKL
-from diffusers.pipeline_utils import DiffusionPipeline
+from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.schedulers import (
     DDIMScheduler,
     DPMSolverMultistepScheduler,
@@ -124,6 +124,7 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
             audio_encoder=audio_encoder,
             unet=unet,
             scheduler=scheduler,
+            video_index_generator=video_index_generator,
         )
 
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
