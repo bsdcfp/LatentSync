@@ -542,12 +542,8 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                     inference_faces, affine_transform=False
                 )
 
-                # 7-8. 并行化准备image和mask latents
-                if debug:
-                    prepare_start_time = time.time()
-                
-                image_latents, mask_latents, masked_image_latents = self.prepare_image_and_mask_latents(
-                    pixel_values,
+                # 7. Prepare mask latent variables
+                mask_latents, masked_image_latents = self.prepare_mask_latents(
                     masks,
                     masked_pixel_values,
                     height,
@@ -557,10 +553,15 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                     generator,
                     do_classifier_free_guidance,
                 )
-                
-                if debug:
-                    prepare_time = time.time() - prepare_start_time
-                    print(f"  ⚡ 批量编码latent准备耗时: {prepare_time:.3f}s")
+
+                # 8. Prepare image latents
+                image_latents = self.prepare_image_latents(
+                    pixel_values,
+                    device,
+                    weight_dtype,
+                    generator,
+                    do_classifier_free_guidance,
+                )
 
                 # 9. Denoising loop
                 denoising_start_time = time.time()
@@ -851,64 +852,4 @@ class LipsyncPipeline_online_0618(DiffusionPipeline):
                 print(f"   - mask帧数量: {len(all_mask_frames)}")
         
         return faces, all_original_frames, all_boxes, all_affine_matrices, all_mask_frames
-
-    def clear_cache(self):
-        """清理GPU缓存"""
-        if hasattr(torch.cuda, 'empty_cache'):
-            torch.cuda.empty_cache()
-        print("🧹 GPU缓存已清理")
-
-    @NVTXContext
-    def prepare_image_and_mask_latents(
-        self, 
-        images, 
-        masks, 
-        masked_images, 
-        height, 
-        width, 
-        dtype, 
-        device, 
-        generator, 
-        do_classifier_free_guidance
-    ):
-        """
-        并行处理图像和mask的latent准备
-        """
-        # 1. 同时处理图像和masked_images的resize
-        masks_resized = torch.nn.functional.interpolate(
-            masks, size=(height // self.vae_scale_factor, width // self.vae_scale_factor)
-        )
-        
-        # 2. 将所有图像数据移到设备上
-        images = images.to(device=device, dtype=dtype)
-        masked_images = masked_images.to(device=device, dtype=dtype)
-        masks_resized = masks_resized.to(device=device, dtype=dtype)
-        
-        # 3. 批量编码：将images和masked_images合并成一个batch
-        # images: [16, 3, 256, 256]
-        # masked_images: [16, 3, 256, 256]  
-        combined_images = torch.cat([images, masked_images], dim=0)  # [32, 3, 256, 256]
-        
-        # 4. 一次性编码所有图像
-        with torch.no_grad():
-            combined_latents = self.vae.encode(combined_images).latent_dist.sample(generator=generator)
-            combined_latents = (combined_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
-        
-        # 5. 分离结果
-        batch_size = images.shape[0]
-        image_latents = combined_latents[:batch_size]      # 前16个是image_latents
-        masked_image_latents = combined_latents[batch_size:]  # 后16个是masked_image_latents
-        
-        # 6. 重新排列维度
-        image_latents = rearrange(image_latents, "f c h w -> 1 c f h w")
-        masked_image_latents = rearrange(masked_image_latents, "f c h w -> 1 c f h w")
-        masks_resized = rearrange(masks_resized, "f c h w -> 1 c f h w")
-        
-        # 7. 处理CFG
-        if do_classifier_free_guidance:
-            image_latents = torch.cat([image_latents] * 2)
-            masked_image_latents = torch.cat([masked_image_latents] * 2)
-            masks_resized = torch.cat([masks_resized] * 2)
-        
-        return image_latents, masks_resized, masked_image_latents
 
