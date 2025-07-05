@@ -118,9 +118,11 @@ done
 
 # 输出路径
 mkdir -p "$OUTPUT_DIR"
-VIDEO_OUT_PATH="$OUTPUT_DIR/video.mp4"
-MASK_OUTPUT_PATH="$OUTPUT_DIR/mask.mp4"
-LOG_FILE="$OUTPUT_DIR/inference.log"
+VIDEO_OUT_PATH="$OUTPUT_DIR/generated_video_$(date +%Y%m%d_%H%M%S).mp4"
+MASK_OUTPUT_PATH="$OUTPUT_DIR/generated_mask_video_$(date +%Y%m%d_%H%M%S).mp4"
+
+# 日志文件
+LOG_FILE="$OUTPUT_DIR/inference_log_$(date +%Y%m%d_%H%M%S).txt"
 
 # =========================
 # 显示配置并执行
@@ -132,7 +134,7 @@ echo "⚙️  配置: ${TARGET_FPS}fps | ${INFERENCE_STEPS}步 | 种子${SEED} |
 echo "============================================================"
 
 # 构建完整的Python命令
-PYTHON_CMD="python $SCRIPT_DIR/scripts/inference_online_0618.py \\
+PYTHON_CMD="python $SCRIPT_DIR/scripts/inference_online_0701.py \\
     --unet_config_path $SCRIPT_DIR/configs/unet/second_stage.yaml \\
     --inference_ckpt_path $WEIGHTS_DIR/latentsync_unet.pt \\
     --whisper_model_path $WEIGHTS_DIR/whisper/tiny.pt \\
