@@ -1,5 +1,0 @@
-transformer-engine
-opencv-python
-opencv-contrib-python
-opencv
-opencv-python-headless

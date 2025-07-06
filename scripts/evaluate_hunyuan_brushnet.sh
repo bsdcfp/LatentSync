@@ -1,0 +1,13 @@
+python ./productscene/inference/sample_controlnet2.py \
+    --infer-mode fa \
+    --no-enhance \
+    --dit-weight ./models/t2i/model/dit.pt \
+    --controlnet-weight ./models/t2i/model/controlnet.pt \
+    --load-key module \
+    --infer-steps 25 \
+    --control-type canny \
+    --prompt "The image showcases a sleek and modern Women's wristlet wallet. bright and airy, vibrant, uplifting, minimalist background, soft yellow, deep blue, elegant style, sophisticated design, delicate curves, intricate details, high-quality texture.brightness, high-gloss" \
+    --condition-image-path ./examples/test_data/test2.png \
+    --control-weight 0.8 \
+    --results-dir ./output \
+    --model-root ./models

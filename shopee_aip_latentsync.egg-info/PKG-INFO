@@ -1,0 +1,98 @@
+Metadata-Version: 2.4
+Name: shopee-aip-latentsync
+Version: 1.0.2.dev5+g1b9d4a2.d20250705
+Summary: Optimized Avatar Application LatentSync Service
+Author-email: AIP DeepLearning Team <fuping.chun@shopee.com>
+Maintainer-email: AIP DeepLearning Team <fuping.chun@shopee.com>
+License: Apache 2.0
+Project-URL: Homepage, https://github.com/shopee/latentsync
+Project-URL: Documentation, https://github.com/shopee/latentsync#readme
+Project-URL: Repository, https://github.com/shopee/latentsync.git
+Project-URL: Bug Tracker, https://github.com/shopee/latentsync/issues
+Keywords: DeepLearning,Diffusion,Pytorch,Stable Diffusion,LatentSync
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: torch>=2.2.0
+Requires-Dist: accelerate>=0.26.0
+Requires-Dist: opencv-python-headless>=4.5.0
+Requires-Dist: transformers>=4.45.0
+Requires-Dist: diffusers>=0.34.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: pillow>=8.0.0
+Requires-Dist: safetensors>=0.4.0
+Requires-Dist: huggingface-hub>=0.33.0
+Requires-Dist: psutil>=5.8.0
+Requires-Dist: packaging>=20.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: einops>=0.7.0
+Requires-Dist: cuda-python>=12.0.0
+Requires-Dist: polygraphy>=0.47.0
+Requires-Dist: pandas>=1.5.0
+Requires-Dist: pynvml>=11.0.0
+Requires-Dist: onnx>=1.15.0
+Provides-Extra: dev
+Requires-Dist: pytest>=6.0; extra == "dev"
+Requires-Dist: pytest-cov>=2.0; extra == "dev"
+Requires-Dist: black>=22.0; extra == "dev"
+Requires-Dist: isort>=5.0; extra == "dev"
+Requires-Dist: flake8>=3.8; extra == "dev"
+Requires-Dist: mypy>=0.900; extra == "dev"
+Provides-Extra: shopee
+Requires-Dist: aip-oneservice>=0.4.0; extra == "shopee"
+Requires-Dist: mms-sdk>=1.0.0; extra == "shopee"
+Requires-Dist: shopee-onemonitor>=0.1.0; extra == "shopee"
+Provides-Extra: tensorrt
+Requires-Dist: tensorrt>=8.0.0; extra == "tensorrt"
+Requires-Dist: polygraphy>=0.47.0; extra == "tensorrt"
+Requires-Dist: cuda-python>=12.0.0; extra == "tensorrt"
+Requires-Dist: opencv-python>=4.5.0; extra == "tensorrt"
+Provides-Extra: all
+Requires-Dist: pytest>=6.0; extra == "all"
+Requires-Dist: pytest-cov>=2.0; extra == "all"
+Requires-Dist: black>=22.0; extra == "all"
+Requires-Dist: isort>=5.0; extra == "all"
+Requires-Dist: flake8>=3.8; extra == "all"
+Requires-Dist: mypy>=0.900; extra == "all"
+Requires-Dist: aip-oneservice>=0.4.0; extra == "all"
+Requires-Dist: mms-sdk>=1.0.0; extra == "all"
+Requires-Dist: shopee-onemonitor>=0.1.0; extra == "all"
+Requires-Dist: tensorrt>=8.0.0; extra == "all"
+
+# AIGC_ProductBgGen_v2
+
+## 1. Init ENV
+
+AIS Image: 
+```
+harbor.shopeemobile.com/aip/aip-image-hub/aip-prod/projects/0/pytorch2.0-cu12.1-py3.10-trt8.6:py3.10-cu12.1-pt2.0-trt8.6-vscode1.82.2-d540733753
+```
+
+Run init script:
+```
+bash build_env/init_ais_run.sh {code_root_dir}
+```
+
+## 2. Train
+
+Run AIS experiment:
+```
+bash script/run_exp.sh {code_root_dir}
+```
+
+## 3. Inference
+
+```
+python pipeline/run_sdxl_brushnet_ipadapter.py --foreground examples/test_data/test_foreground.png --template_image examples/test_data/test_template_image.png --template_config examples/test_data/test_template_config.txt --logdir runs/infe/apptool --ckpt {ckpt_path}
+```
