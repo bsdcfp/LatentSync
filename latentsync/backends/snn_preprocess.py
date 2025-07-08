@@ -69,45 +69,6 @@ class SNNPreprocessor:
             return None
     
     @NVTXContext
-    def process_input_data(self, input_data: str) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int]:
-        """
-        处理输入数据（可能是image_id或base64数据）
-        
-        Args:
-            input_data: 输入数据（image_id或base64编码的图片）
-            
-        Returns:
-            Tuple[image, mask, status_code]: 
-            - image: RGB格式的图片数组
-            - mask: mask数组 
-            - status_code: 状态码
-        """
-        try:
-            # 检测输入类型
-            if self._is_base64_data(input_data):
-                logger.info("Detected base64 image data, decoding...")
-                # 解码base64数据
-                foreground_image = self._decode_base64_image(input_data)
-                if foreground_image is None:
-                    return None, None, PI_STATUS_CODE.DOWNLOAD_FG_ERROR
-            else:
-                logger.info(f"Detected image_id, downloading: {input_data[:20]}...")
-                # 下载图片
-                foreground_image = download_sp_image(input_data, cv2.IMREAD_UNCHANGED)
-                if foreground_image is None:
-                    logger.error(f"Failed to download image: {input_data[:20]}...")
-                    return None, None, PI_STATUS_CODE.DOWNLOAD_FG_ERROR
-            
-            # 处理图片格式
-            image, mask = self._process_image_format(foreground_image)
-            
-            return image, mask, PI_STATUS_CODE.SUCCESS
-            
-        except Exception as e:
-            logger.error(f"Error processing input data: {e}")
-            return None, None, PI_STATUS_CODE.DOWNLOAD_FG_ERROR
-    
-    @NVTXContext
     def _process_image_format(self, foreground_image: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         将下载的图片转换为模型输入格式

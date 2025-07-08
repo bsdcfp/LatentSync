@@ -11,6 +11,7 @@ class PI_STATUS_CODE():
     UPLOAD_ERROR = 10004
     GEN_PROMPT_ERROR = 10005
     NSFW_ERROR = 10006
+    GENERATION_ERROR = 10007  # 添加视频生成错误状态码
 
     # filter
     FILTER_CROP_EDGE = 10101
