@@ -6,6 +6,12 @@ import numpy as np
 from diffusers.utils import BaseOutput
 from latentsync.src.models.unet import UNet3DConditionOutput
 
+from simpleprofiler.profiler import NVTXContext
+from latentsync.trt_backend import TrtExecutor
+from cuda import cudart
+
+from einops import rearrange
+
 # 在文件开头添加这些函数定义
 def diycache_forward(
     self,
@@ -92,11 +98,40 @@ def diycache_forward(
             should_calc = True
             # 重新计算
             ori_sample = sample.clone()
-            final_sample = self._compute_unet_blocks(
+            ############################### BACKEND #################################
+            if self.verbose:
+                start = torch.cuda.Event(enable_timing=True)
+                end = torch.cuda.Event(enable_timing=True)
+                start.record()
+            if self.backend == 'trt' and 'unet' in self.trt_executor.stages:
+                feed_dict = {
+                    "sample": sample,
+                    "emb": emb,
+                    "encoder_hidden_states": encoder_hidden_states,
+                }
+
+                final_sample =  self.trt_executor.runEngine('unet', feed_dict)['out_sample']
+                real_backend = 'trt'
+            elif self.backend == 'torch':
+                final_sample = self._compute_unet_blocks(
                 sample, emb, encoder_hidden_states, attention_mask,
                 down_block_additional_residuals, mid_block_additional_residual,
                 forward_upsample_size
             )
+                real_backend = 'torch'
+            else:
+                final_sample = self._compute_unet_blocks(
+                sample, emb, encoder_hidden_states, attention_mask,
+                down_block_additional_residuals, mid_block_additional_residual,
+                forward_upsample_size
+            )
+                real_backend = 'torch'
+            if self.verbose:
+                end.record()
+                torch.cuda.synchronize()
+                print("[INFO] unet_cache", real_backend, "execution time {:.2f}".format(start.elapsed_time(end)), "ms")
+            ############################### BACKEND #################################
+
             current_residual = final_sample - ori_sample
             
             # 根据配置的更新模式更新previous_residual（在计算一致性指标之后）
@@ -112,11 +147,39 @@ def diycache_forward(
             final_sample = sample + self.previous_residual
     else:
         # 标准计算路径
-        final_sample = self._compute_unet_blocks(
+        ############################### BACKEND #################################
+        if self.verbose:
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
+        if self.backend == 'trt' and 'unet' in self.trt_executor.stages:
+            feed_dict = {
+                "sample": sample,
+                "emb": emb,
+                "encoder_hidden_states": encoder_hidden_states,
+            }
+
+            final_sample =  self.trt_executor.runEngine('unet', feed_dict)['out_sample']
+            real_backend = 'trt'
+        elif self.backend == 'torch':
+            final_sample = self._compute_unet_blocks(
             sample, emb, encoder_hidden_states, attention_mask,
             down_block_additional_residuals, mid_block_additional_residual,
             forward_upsample_size
         )
+            real_backend = 'torch'
+        else:
+            final_sample = self._compute_unet_blocks(
+            sample, emb, encoder_hidden_states, attention_mask,
+            down_block_additional_residuals, mid_block_additional_residual,
+            forward_upsample_size
+        )
+            real_backend = 'torch'
+        if self.verbose:
+            end.record()
+            torch.cuda.synchronize()
+            print("[INFO] unet_cache", real_backend, "execution time {:.2f}".format(start.elapsed_time(end)), "ms")
+        ############################### BACKEND #################################
     # print(f"final_sample 1 shape: {final_sample.shape}") # torch.Size([1, 320, 16, 32, 32])
 
     # 后处理
@@ -257,3 +320,144 @@ def setup_diycache_unet(unet, first_step_offset=1, last_step_offset=4, num_steps
     
     print(f"DiyCache已启用 - 第一步偏移: {first_step_offset}, 最后一步偏移: {last_step_offset}")
     return unet
+
+def load_trt_unet(self, engine_root_path, batch_size=1, use_cuda_graph=False, verbose=False):
+    print("[INFO] Start loading trt engine for Unet")
+    self.backend = 'trt'
+    self.verbose = verbose
+    self.trt_executor = TrtExecutor(stages=['unet'], use_cuda_graph=use_cuda_graph, verbose=verbose)
+    self.trt_executor.loadEngines(engine_root_path)
+
+def load_trt_vae(self, engine_root_path, batch_size=1, use_cuda_graph=False, verbose=False):
+    print("[INFO] Start loading trt engine for vae encode and decode")
+    self.backend = 'trt'
+    self.verbose = verbose
+    self.trt_executor = TrtExecutor(stages=['vae_decode', 'vae_encode'], use_cuda_graph=use_cuda_graph, verbose=verbose)
+    self.trt_executor.loadEngines(engine_root_path)
+
+def calculate_max_device_memory(self):
+    return self.trt_executor.calculateMaxDeviceMemory()
+
+def activate_engine(self, shared_device_memory, batch_size=1):
+    self.trt_executor.activateEngines(shared_device_memory)
+    self.trt_executor.loadResources()
+    self.trt_executor.reshape(batch_size)
+
+def reshape(self, batch_size=1, remove_cfg=False):
+    self.trt_executor.reshape(batch_size, remove_cfg)
+
+
+@NVTXContext
+def prepare_mask_latents(
+        self, mask, masked_image, height, width, dtype, device, generator, do_classifier_free_guidance
+    ):
+        # resize the mask to latents shape as we concatenate the mask to the latents
+        # we do that before converting to dtype to avoid breaking in case we're using cpu_offload
+        # and half precision
+        mask = torch.nn.functional.interpolate(
+            mask, size=(height // self.vae_scale_factor, width // self.vae_scale_factor)
+        )
+        ############################### BACKEND #################################
+        if self.vae.verbose:
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
+        if self.vae.backend == 'trt' and 'vae_decode' in self.vae.trt_executor.stages:
+            feed_dict = {
+                "latents": masked_image,
+            }
+            masked_image_latents =  self.vae.trt_executor.runEngine('vae_encode', feed_dict)['output'].to(torch.float16)
+            real_backend = 'trt'
+        elif self.vae.backend == 'torch':
+            masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
+            real_backend = 'torch'
+        else:
+            masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
+            real_backend = 'torch'
+        if self.vae.verbose:
+            end.record()
+            torch.cuda.synchronize()
+            print("[INFO] vae encode mask", real_backend, "execution time {:.2f}".format(start.elapsed_time(end)), "ms")
+        ############################### BACKEND #################################
+
+        # encode the mask image into latents space so we can concatenate it to the latents
+        masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
+        masked_image_latents = (masked_image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
+
+        # aligning device to prevent device errors when concating it with the latent model input
+        masked_image_latents = masked_image_latents.to(device=device, dtype=dtype)
+        mask = mask.to(device=device, dtype=dtype)
+
+        # assume batch size = 1
+        mask = rearrange(mask, "f c h w -> 1 c f h w")
+        masked_image_latents = rearrange(masked_image_latents, "f c h w -> 1 c f h w")
+
+        mask = torch.cat([mask] * 2) if do_classifier_free_guidance else mask
+        masked_image_latents = (
+            torch.cat([masked_image_latents] * 2) if do_classifier_free_guidance else masked_image_latents
+        )
+        return mask, masked_image_latents
+
+
+@NVTXContext
+def prepare_image_latents(self, images, device, dtype, generator, do_classifier_free_guidance):
+    images = images.to(device=device, dtype=dtype)
+
+    ############################### BACKEND #################################
+    if self.vae.verbose:
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
+    if self.vae.backend == 'trt' and 'vae_decode' in self.vae.trt_executor.stages:
+        feed_dict = {
+            "latents": images,
+        }
+        image_latents =  self.vae.trt_executor.runEngine('vae_encode', feed_dict)['output'].to(torch.float16)
+        real_backend = 'trt'
+    elif self.vae.backend == 'torch':
+        image_latents = self.vae.encode(images).latent_dist.sample(generator=generator)
+        real_backend = 'torch'
+    else:
+        image_latents = self.vae.encode(images).latent_dist.sample(generator=generator)
+        real_backend = 'torch'
+    if self.vae.verbose:
+        end.record()
+        torch.cuda.synchronize()
+
+        print("[INFO] vae encode image", real_backend, "execution time {:.2f}".format(start.elapsed_time(end)), "ms")
+    ############################### BACKEND #################################
+
+    image_latents = (image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
+    image_latents = rearrange(image_latents, "f c h w -> 1 c f h w")
+    image_latents = torch.cat([image_latents] * 2) if do_classifier_free_guidance else image_latents
+
+    return image_latents
+
+@NVTXContext
+def decode_latents(self, latents):
+    latents = latents / self.vae.config.scaling_factor + self.vae.config.shift_factor
+    latents = rearrange(latents, "b c f h w -> (b f) c h w")
+    ############################### BACKEND #################################
+    if self.vae.verbose:
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
+    if self.vae.backend == 'trt' and 'vae_decode' in self.vae.trt_executor.stages:
+        feed_dict = {
+            "latents": latents,
+        }
+
+        decoded_latents =  self.vae.trt_executor.runEngine('vae_decode', feed_dict)['output']
+        real_backend = 'trt'
+    elif self.vae.backend == 'torch':
+        decoded_latents = self.vae.decode(latents).sample
+        real_backend = 'torch'
+    else:
+        decoded_latents = self.vae.decode(latents).sample
+        real_backend = 'torch'
+    if self.vae.verbose:
+        end.record()
+        torch.cuda.synchronize()
+        print("[INFO] vae decode", real_backend, "execution time {:.2f}".format(start.elapsed_time(end)), "ms")
+    ############################### BACKEND #################################
+    return decoded_latents

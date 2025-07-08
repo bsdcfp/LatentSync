@@ -23,6 +23,7 @@ predictors:
     save_debug_images: true 
     debug_output_path: "./output/"  # 相对于工作目录
     torch_compile: False
+    fast_engine: True
     
     # 业务配置文件路径
     config_file: "V1.0_latentsync_video_predictor.json"  # 业务配置文件路径
