@@ -17,14 +17,13 @@ from latentsync import NVTXContext, PROFILER_AVAILABLE
 
 from oneservice import InputDictType, OutputDictType, BackendConfig, MonitorTimer
 from oneservice.backends.base import BaseBackend
-
-from latentsync.src.utils.status_code import PI_STATUS_CODE
+from latentsync.backends.utils import setup_diycache_unet
 
 # 配置torch.compile缓存设置
 torch._dynamo.config.cache_size_limit = 64
 
 class SNNTorchBackend(BaseBackend):
-    """LatentSync视频生成后端"""
+    """LatentSync视频生成后端 - 仅负责模型推理"""
 
     def __init__(self, config: BackendConfig):
         super(SNNTorchBackend, self).__init__(config)
@@ -220,77 +219,14 @@ class SNNTorchBackend(BaseBackend):
         # 配置DiyCache
         if config.get("enable_diycache", False):
             logger.info("Enabling DiyCache...")
-            self._setup_diycache_unet(
+            setup_diycache_unet(
+                unet=self.unet,
                 first_step_offset=config.get("first_step_offset", 1),
                 last_step_offset=config.get("last_step_offset", 4),
                 num_steps=config.get("inference_steps", 20)
             )
         
         logger.info("LatentSync pipeline initialized successfully")
-
-    def _setup_diycache_unet(self, first_step_offset=1, last_step_offset=4, num_steps=20):
-        """设置DiyCache"""
-        # 这里可以添加DiyCache的设置逻辑
-        # 由于代码较长，这里先跳过具体实现
-        logger.info(f"DiyCache setup: first_step_offset={first_step_offset}, last_step_offset={last_step_offset}, num_steps={num_steps}")
-
-    @NVTXContext
-    def preprocess_data(
-        self,
-        video_cache_dir: str,
-        audio_path: str,
-        mask_base_dir: str = None,
-        num_frames: int = 16,
-        video_fps: int = 25,
-        need_padding_to_16x: bool = True,
-        debug: bool = False,
-        **kwargs,
-    ):
-        """
-        前处理：整合四个子任务（取视频特征、音频特征、做padding、数据分chunk）
-        
-        Returns:
-            dict: 包含所有预处理后的数据，包括分chunk后的数据
-        """
-        # 统一路径处理：区分模型库路径和代码路径
-        code_base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        model_base = self.config.model_path
-        def resolve_path(path):
-            if not path:
-                return path
-            if os.path.isabs(path):
-                return path
-            # 以weights/开头的，拼到模型库
-            if path.startswith("weights/"):
-                return os.path.join(model_base, path)
-            # 以latentsync/开头的，拼到代码根目录
-            if path.startswith("latentsync/"):
-                return os.path.join(code_base, path)
-            # 以stabilityai/开头的（VAE模型），直接用
-            if path.startswith("stabilityai/"):
-                return path
-            # 其他路径（如0612_online_templete_female_32fps_resize_720_1560/），拼到模型库
-            return os.path.join(model_base, path)
-        
-        # 解析路径
-        resolved_video_cache_dir = resolve_path(video_cache_dir)
-        resolved_mask_base_dir = resolve_path(mask_base_dir) if mask_base_dir else None
-        
-        if debug:
-            print(f"🔧 路径解析:")
-            print(f"  - video_cache_dir: {video_cache_dir} -> {resolved_video_cache_dir}")
-            print(f"  - mask_base_dir: {mask_base_dir} -> {resolved_mask_base_dir}")
-        
-        return self.pipeline.preprocess_data_0701(
-            video_cache_dir=resolved_video_cache_dir,
-            audio_path=audio_path,
-            mask_base_dir=resolved_mask_base_dir,
-            num_frames=num_frames,
-            video_fps=video_fps,
-            need_padding_to_16x=need_padding_to_16x,
-            debug=debug,
-            **kwargs
-        )
 
     @NVTXContext
     def model_inference_by_chunk(
@@ -338,231 +274,14 @@ class SNNTorchBackend(BaseBackend):
             **kwargs
         )
 
-    @NVTXContext
-    def postprocess_video(
-        self,
-        synced_video_frames: List[torch.Tensor],
-        original_video_frames: List,
-        boxes: List,
-        affine_matrices: List,
-        original_faces_len: int,
-        num_frames: int = 16,
-        debug: bool = False,
-        **kwargs
-    ) -> np.ndarray:
-        """
-        视频后处理：将所有推理结果恢复为最终视频帧
-        
-        Args:
-            synced_video_frames: 推理后的latents列表
-            original_video_frames: 原始视频帧
-            boxes: 人脸框列表
-            affine_matrices: 仿射变换矩阵列表
-            original_faces_len: 原始faces长度
-            num_frames: 每个chunk的帧数
-            debug: 调试模式
-            
-        Returns:
-            np.ndarray: 最终的视频帧数组
-        """
-        return self.pipeline.postprocess_video(
-            synced_video_frames=synced_video_frames,
-            original_video_frames=original_video_frames,
-            boxes=boxes,
-            affine_matrices=affine_matrices,
-            original_faces_len=original_faces_len,
-            num_frames=num_frames,
-            debug=debug,
-            **kwargs
-        )
+    def get_pipeline(self):
+        """获取pipeline实例，供外部使用"""
+        return self.pipeline
 
-    def save_final_output(
-        self,
-        final_video_frames: np.ndarray,
-        audio_samples: torch.Tensor,
-        video_out_path: str,
-        mask_frames: Optional[List] = None,
-        mask_output_path: Optional[str] = None,
-        video_fps: int = 25,
-        audio_sample_rate: int = 16000,
-        convert_audio_to_48k: bool = True,
-        debug: bool = False,
-        **kwargs
-    ):
-        """
-        保存最终输出：音频视频合成和mask视频输出
-        
-        Args:
-            final_video_frames: 最终的视频帧数组
-            audio_samples: 音频样本数据
-            video_out_path: 视频输出路径
-            mask_frames: mask帧列表（可选）
-            mask_output_path: mask视频输出路径（可选）
-            video_fps: 视频帧率
-            audio_sample_rate: 音频采样率
-            convert_audio_to_48k: 是否转换音频到48k
-            debug: 调试模式
-        """
-        return self.pipeline.save_final_output(
-            final_video_frames=final_video_frames,
-            audio_samples=audio_samples,
-            video_out_path=video_out_path,
-            mask_frames=mask_frames,
-            mask_output_path=mask_output_path,
-            video_fps=video_fps,
-            audio_sample_rate=audio_sample_rate,
-            convert_audio_to_48k=convert_audio_to_48k,
-            debug=debug,
-            **kwargs
-        )
+    def get_video_config(self):
+        """获取视频配置"""
+        return self.video_config
 
-    @NVTXContext
-    def forward(self, audio_paths: List[str], output_paths: List[str], mask_output_paths: Optional[List[str]] = None) -> List[Dict]:
-        """
-        视频生成推理方法
-        
-        Args:
-            audio_paths: 音频文件路径列表
-            output_paths: 输出视频路径列表
-            mask_output_paths: 输出mask视频路径列表（可选）
-        
-        Returns:
-            List of generation results with keys: 'status_code', 'video_path', 'mask_path', 'error_message'
-        """
-        if not audio_paths or not output_paths:
-            logger.warning("Empty input provided to forward method")
-            return []
-        
-        batch_size = len(audio_paths)
-        logger.info(f"Starting video generation for {batch_size} audio files")
-        
-        results = []
-        
-        # 由于视频生成是计算密集型任务，我们逐个处理
-        for i in range(batch_size):
-            try:
-                audio_path = audio_paths[i]
-                output_path = output_paths[i]
-                mask_output_path = mask_output_paths[i] if mask_output_paths else None
-                
-                logger.info(f"Processing video {i+1}/{batch_size}: {os.path.basename(audio_path)}")
-                
-                # 确保输出目录存在
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                if mask_output_path:
-                    os.makedirs(os.path.dirname(mask_output_path), exist_ok=True)
-                
-                # 调用pipeline生成视频 - 拆分为四个步骤
-                start_time = time.time()
-                
-                # 步骤1: 前处理
-                logger.info(f"Step 1: Preprocessing data for {os.path.basename(audio_path)}")
-                preprocess_data = self.preprocess_data(
-                    video_cache_dir=self.video_config.get("video_cache_dir"),
-                    audio_path=audio_path,
-                    mask_base_dir=self.video_config.get("mask_base_dir"),
-                    num_frames=16,
-                    video_fps=self.video_config.get("target_fps", 25),
-                    need_padding_to_16x=True,
-                    debug=self.video_config.get("debug_pipeline", False),
-                )
-                
-                # 步骤2: 模型推理
-                logger.info(f"Step 2: Model inference for {os.path.basename(audio_path)}")
-                synced_video_frames = []
-                faces_by_chunk = preprocess_data['faces_by_chunk']
-                whisper_chunks_by_chunk = preprocess_data['whisper_chunks_by_chunk']
-                
-                for chunk_idx in range(preprocess_data['num_inferences']):
-                    chunk_start_time = time.time()
-                    
-                    decoded_latents = self.model_inference_by_chunk(
-                        chunk_faces=faces_by_chunk[chunk_idx],
-                        chunk_whisper_features=whisper_chunks_by_chunk[chunk_idx],
-                        num_frames=16,
-                        num_inference_steps=self.video_config.get("inference_steps", 20),
-                        guidance_scale=self.video_config.get("guidance_scale", 1.0),
-                        weight_dtype=self.dtype,
-                        eta=0.0,
-                        generator=None,
-                        callback=None,
-                        callback_steps=1,
-                        height=256,
-                        width=256,
-                        debug=self.video_config.get("debug_pipeline", False),
-                    )
-                    
-                    synced_video_frames.append(decoded_latents)
-                    
-                    chunk_time = time.time() - chunk_start_time
-                    logger.info(f"Chunk {chunk_idx+1}/{preprocess_data['num_inferences']} completed in {chunk_time:.3f}s")
-                
-                # 步骤3: 后处理
-                logger.info(f"Step 3: Postprocessing video for {os.path.basename(audio_path)}")
-                final_video_frames = self.postprocess_video(
-                    synced_video_frames=synced_video_frames,
-                    original_video_frames=preprocess_data['original_video_frames'],
-                    boxes=preprocess_data['boxes'],
-                    affine_matrices=preprocess_data['affine_matrices'],
-                    original_faces_len=preprocess_data['original_faces_len'],
-                    num_frames=16,
-                    debug=self.video_config.get("debug_pipeline", False),
-                )
-                
-                # 步骤4: 保存最终输出
-                logger.info(f"Step 4: Saving final output for {os.path.basename(audio_path)}")
-                self.save_final_output(
-                    final_video_frames=final_video_frames,
-                    audio_samples=preprocess_data['audio_samples'],
-                    video_out_path=output_path,
-                    mask_frames=preprocess_data['mask_frames'],
-                    mask_output_path=mask_output_path,
-                    video_fps=self.video_config.get("target_fps", 25),
-                    audio_sample_rate=16000,
-                    convert_audio_to_48k=True,
-                    debug=self.video_config.get("debug_pipeline", False),
-                )
-                
-                gen_frame_num = preprocess_data['gen_frame_num']
-                video_index_list = preprocess_data['video_index_list']
-                
-                end_time = time.time()
-                generation_time = end_time - start_time
-                
-                # 检查输出文件是否存在
-                if os.path.exists(output_path):
-                    result = {
-                        'status_code': PI_STATUS_CODE.SUCCESS,
-                        'video_path': output_path,
-                        'mask_path': mask_output_path if mask_output_path and os.path.exists(mask_output_path) else None,
-                        'generation_time': generation_time,
-                        'gen_frame_num': gen_frame_num,
-                        'error_message': None
-                    }
-                    logger.info(f"Video generation successful: {os.path.basename(output_path)} ({generation_time:.2f}s)")
-                else:
-                    result = {
-                        'status_code': PI_STATUS_CODE.GENERATION_ERROR,
-                        'video_path': None,
-                        'mask_path': None,
-                        'generation_time': generation_time,
-                        'gen_frame_num': 0,
-                        'error_message': f"Output video file not found: {output_path}"
-                    }
-                    logger.error(f"Video generation failed: output file not found")
-                
-            except Exception as e:
-                logger.error(f"Error processing video {i+1}: {str(e)}")
-                result = {
-                    'status_code': PI_STATUS_CODE.GENERATION_ERROR,
-                    'video_path': None,
-                    'mask_path': None,
-                    'generation_time': 0,
-                    'gen_frame_num': 0,
-                    'error_message': str(e)
-                }
-            
-            results.append(result)
-        
-        logger.info(f"Video generation completed for {batch_size} files")
-        return results 
+    def get_dtype(self):
+        """获取数据类型"""
+        return self.dtype 
