@@ -35,6 +35,7 @@ wandb/
 *.avi
 *.wav
 *.png
+!mask.png
 *.jpg
 *.jpeg
 *.csv
@@ -44,6 +45,7 @@ wandb/
 *.log
 *.txt
 *.lprof
+models/temp_config.yaml
 
 !/latentsync/utils/mask*.png
 /checkpoints/

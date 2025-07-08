@@ -54,20 +54,21 @@ time_list = []
 # 全局predictor实例
 _global_predictor = None
 
-def get_predictor(config_file: str) -> SNNPredictor:
+def get_predictor(config_file: str, lightweight_mode: bool = True) -> SNNPredictor:
     """
     获取全局predictor实例，如果不存在则初始化
     
     Args:
         config_file: 配置文件路径
+        lightweight_mode: 是否使用轻量级模式（客户端默认True）
         
     Returns:
         SNNPredictor: predictor实例
     """
     global _global_predictor
     if _global_predictor is None:
-        print("Initializing global SNNPredictor...")
-        _global_predictor = SNNPredictor(config_file)
+        print(f"Initializing global SNNPredictor (lightweight_mode={lightweight_mode})...")
+        _global_predictor = SNNPredictor(config_file, lightweight_mode=lightweight_mode)
         print("✅ Global SNNPredictor initialized successfully")
     return _global_predictor
 
@@ -262,7 +263,7 @@ def main():
                        help='Path to the config file')
     parser.add_argument('--local-url', action='store_true', default=False,
                        help='Use local service instead of remote service')
-    parser.add_argument('--test-num', type=int, default=2, 
+    parser.add_argument('--test-num', type=int, default=1, 
                        help='Number of test iterations to run')
     parser.add_argument('--save-results', action='store_true', default=False,
                        help='Save test results to CSV file')
@@ -280,6 +281,8 @@ def main():
                        help='Enable pipeline debug mode')
     parser.add_argument('--debug-video-merger', action='store_true', default=False,
                        help='Enable video merger debug mode')
+    parser.add_argument('--full-mode', action='store_true', default=False,
+                       help='Use full mode (load all models) instead of lightweight mode')
     
     args = parser.parse_args()
 
@@ -299,6 +302,10 @@ def main():
         print(f"Supported formats: {audio_extensions}")
         return
 
+    # 根据命令行参数选择模式
+    lightweight_mode = not args.full_mode
+    mode_name = "lightweight" if lightweight_mode else "full"
+    
     # 打印配置信息
     print("=" * 60)
     print(f"[CONFIG] Video Generation HTTP Client Test Configuration")
@@ -314,6 +321,7 @@ def main():
     print(f"  Seed: {args.seed}")
     print(f"  Debug pipeline: {args.debug_pipeline}")
     print(f"  Debug video merger: {args.debug_video_merger}")
+    print(f"  Mode: {mode_name}")
     print("=" * 60)
     
     # 确定URL
@@ -331,10 +339,9 @@ def main():
     
     print(f"\n[INFO] Starting {args.test_num} test iterations...")
     
-    # 预初始化predictor
-    print("Pre-initializing SNNPredictor for better performance...")
+    print(f"Pre-initializing SNNPredictor in {mode_name} mode...")
     init_start_time = time.time()
-    get_predictor(args.config_file)
+    get_predictor(args.config_file, lightweight_mode=lightweight_mode)
     init_time = time.time() - init_start_time
     print(f"✅ Predictor initialization completed in {init_time:.2f}s")
     

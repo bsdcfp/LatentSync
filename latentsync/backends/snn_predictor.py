@@ -32,9 +32,12 @@ torch.set_float32_matmul_precision('high')
 # UNet3DConditionOutput已移至SNNTorchBackend中定义
 
 class SNNPredictor(object):
-    def __init__(self, config_file: str):
+    def __init__(self, config_file: str, lightweight_mode: bool = False):
         config = yaml.safe_load(open(config_file).read())["predictors"]
         dir_path = os.path.dirname(os.path.realpath(config_file))
+        
+        # 保存轻量级模式标志
+        self._lightweight_mode = lightweight_mode
 
         # 1. monitor init process time
         with NVTXContext("SNNPredictor.init"):
@@ -56,16 +59,24 @@ class SNNPredictor(object):
                     if self._has_video_config:
                         logger.info("Found video config, video generation capability will be available")
                     
-                    # 根据配置文件中的backend字段选择后端
-                    backend_type = getattr(config, 'backend', 'TorchBackend')
-                    backend_str = str(backend_type).split('.')[-1] if hasattr(backend_type, '__class__') else str(backend_type)
-                    
-                    if 'TorchBackend' in backend_str:
-                        self._engine = SNNTorchBackend(config)
-                    elif 'TensorRTBackend' in backend_str:
-                        self._engine = SNNFastBackend(config)
+                    if lightweight_mode:
+                        logger.info("🔧 Running in lightweight mode - loading audio models only")
+                        # 轻量级模式：只加载音频处理模型，不加载推理模型
+                        self._engine = self._create_lightweight_backend(config, video_config_path)
+                        self._video_config = self._engine.get_video_config()
                     else:
-                        raise ValueError(f"Unsupported backend type: {backend_type}")
+                        logger.info("🔧 Running in full mode - loading complete models")
+                        # 完整模式：加载所有模型
+                        # 根据配置文件中的backend字段选择后端
+                        backend_type = getattr(config, 'backend', 'TorchBackend')
+                        backend_str = str(backend_type).split('.')[-1] if hasattr(backend_type, '__class__') else str(backend_type)
+                        
+                        if 'TorchBackend' in backend_str:
+                            self._engine = SNNTorchBackend(config)
+                        elif 'TensorRTBackend' in backend_str:
+                            self._engine = SNNFastBackend(config)
+                        else:
+                            raise ValueError(f"Unsupported backend type: {backend_type}")
                     
                     # 视频生成不需要前后处理器
                     self._max_batch_size = config.max_batch_size
@@ -82,6 +93,19 @@ class SNNPredictor(object):
                     self._max_batch_size = config.max_batch_size
                 else:
                     raise NotImplementedError  # TODO
+    
+    def _create_lightweight_backend(self, config, video_config_path: str):
+        """
+        创建轻量级后端：只加载音频处理模型
+        
+        Args:
+            config: 后端配置
+            video_config_path: 视频配置文件路径
+            
+        Returns:
+            SNNTorchBackend: 轻量级后端实例
+        """
+        return SNNTorchBackend(config, lightweight_mode=True)
     
     # 移除重复的视频模型初始化方法，统一使用SNNTorchBackend
     
@@ -182,6 +206,9 @@ class SNNPredictor(object):
         Returns:
             List[torch.Tensor]: 推理结果列表
         """
+        if self._lightweight_mode:
+            raise NotImplementedError("Inference requires full model loading. Use lightweight_mode=False for inference.")
+        
         # 获取pipeline和配置
         pipeline = self._engine.get_pipeline()
         video_config = self._engine.get_video_config()
@@ -276,3 +303,13 @@ class SNNPredictor(object):
             debug=video_config.get("debug_pipeline", False),
         )
     
+    def get_video_config(self):
+        """获取视频配置"""
+        if self._lightweight_mode:
+            return self._video_config
+        else:
+            return self._engine.get_video_config()
+    
+    def is_lightweight_mode(self):
+        """检查是否为轻量级模式"""
+        return self._lightweight_mode

@@ -37,9 +37,10 @@ torch._dynamo.config.cache_size_limit = 64
 class SNNTorchBackend(BaseBackend):
     """LatentSync视频生成后端 - 仅负责模型推理"""
 
-    def __init__(self, config: BackendConfig):
+    def __init__(self, config: BackendConfig, lightweight_mode: bool = False):
         super(SNNTorchBackend, self).__init__(config)
         self.config = config  # 保存config引用
+        self.lightweight_mode = lightweight_mode  # 轻量级模式标志
         model_path = config.model_path
 
         self._use_fp16 = config.fp16
@@ -89,16 +90,25 @@ class SNNTorchBackend(BaseBackend):
             video_config['debug_video_merger'] = config.debug_video_merger
 
         # 初始化模型组件
-        self._init_models(video_config)
-
-        # 初始化pipeline
-        self._init_pipeline(video_config)
+        if self.lightweight_mode:
+            logger.info("🔧 Lightweight mode: loading audio models only")
+            self._init_models(video_config, lightweight_mode=True)
+            # 轻量级模式也需要创建一个临时的pipeline用于预处理和后处理
+            self._init_lightweight_pipeline(video_config)
+        else:
+            logger.info("🔧 Full mode: loading all models")
+            self._init_models(video_config, lightweight_mode=False)
+            # 初始化pipeline
+            self._init_pipeline(video_config)
 
         self._lock = threading.Lock()
 
-    def _init_models(self, config: Dict):
+    def _init_models(self, config: Dict, lightweight_mode: bool = False):
         """初始化模型组件"""
-        logger.info("Initializing LatentSync models...")
+        if lightweight_mode:
+            logger.info("Initializing lightweight LatentSync models (audio only)...")
+        else:
+            logger.info("Initializing LatentSync models...")
 
         # Check if the GPU supports float16
         is_fp16_supported = torch.cuda.is_available() and torch.cuda.get_device_capability()[0] > 7
@@ -131,10 +141,14 @@ class SNNTorchBackend(BaseBackend):
         logger.info(f"Loading UNet config from: {unet_config_path}")
         unet_config = OmegaConf.load(unet_config_path)
 
-        # 初始化调度器 - 处理相对路径
-        scheduler_config_path = resolve_path(config.get("scheduler_config_path", "latentsync/configs"))
-        logger.info(f"Loading scheduler config from: {scheduler_config_path}")
-        scheduler = DDIMScheduler.from_pretrained(scheduler_config_path)
+        # 初始化调度器 - 处理相对路径（仅在完整模式下）
+        if not lightweight_mode:
+            scheduler_config_path = resolve_path(config.get("scheduler_config_path", "latentsync/configs"))
+            logger.info(f"Loading scheduler config from: {scheduler_config_path}")
+            scheduler = DDIMScheduler.from_pretrained(scheduler_config_path)
+        else:
+            scheduler = None
+            logger.info("Skipping scheduler loading in lightweight mode")
 
         # 初始化音频编码器
         whisper_model_path = resolve_path(config.get("whisper_model_path", "weights/whisper/tiny.pt"))
@@ -145,42 +159,50 @@ class SNNTorchBackend(BaseBackend):
             num_frames=16
         )
 
-        # 初始化VAE
-        vae_model_path = resolve_path(config.get("vae_model_path", "stabilityai/sd-vae-ft-mse"))
-        logger.info(f"Loading VAE model from: {vae_model_path}")
-        vae = AutoencoderKL.from_pretrained(
-            vae_model_path,
-            torch_dtype=dtype
-        )
-        vae = vae.to("cuda")
-        vae.config.scaling_factor = 0.18215
-        vae.config.shift_factor = 0
+        # 初始化VAE（仅在完整模式下）
+        if not lightweight_mode:
+            vae_model_path = resolve_path(config.get("vae_model_path", "stabilityai/sd-vae-ft-mse"))
+            logger.info(f"Loading VAE model from: {vae_model_path}")
+            vae = AutoencoderKL.from_pretrained(
+                vae_model_path,
+                torch_dtype=dtype
+            )
+            vae = vae.to("cuda")
+            vae.config.scaling_factor = 0.18215
+            vae.config.shift_factor = 0
+        else:
+            vae = None
+            logger.info("Skipping VAE loading in lightweight mode")
 
-        # 初始化UNet
-        unet_config_dict = OmegaConf.to_container(unet_config)
+        # 初始化UNet（仅在完整模式下）
+        if not lightweight_mode:
+            unet_config_dict = OmegaConf.to_container(unet_config)
 
-        # 确保sample_size被正确设置
-        if 'model' in unet_config_dict:
-            if unet_config_dict['model'].get('sample_size') is None:
-                unet_config_dict['model']['sample_size'] = 64
-                logger.info("Setting sample_size to 64 in UNet config")
-            else:
-                logger.info(f"UNet config sample_size: {unet_config_dict['model']['sample_size']}")
+            # 确保sample_size被正确设置
+            if 'model' in unet_config_dict:
+                if unet_config_dict['model'].get('sample_size') is None:
+                    unet_config_dict['model']['sample_size'] = 64
+                    logger.info("Setting sample_size to 64 in UNet config")
+                else:
+                    logger.info(f"UNet config sample_size: {unet_config_dict['model']['sample_size']}")
 
-        # 只传递model部分的配置给UNet
-        model_config = unet_config_dict.get('model', {})
-        logger.info(f"Model config keys: {list(model_config.keys())}")
+            # 只传递model部分的配置给UNet
+            model_config = unet_config_dict.get('model', {})
+            logger.info(f"Model config keys: {list(model_config.keys())}")
 
-        # 处理UNet检查点路径
-        inference_ckpt_path = resolve_path(config.get("inference_ckpt_path", "weights/latentsync/latentsync_unet.pt"))
-        logger.info(f"Loading UNet checkpoint from: {inference_ckpt_path}")
+            # 处理UNet检查点路径
+            inference_ckpt_path = resolve_path(config.get("inference_ckpt_path", "weights/latentsync/latentsync_unet.pt"))
+            logger.info(f"Loading UNet checkpoint from: {inference_ckpt_path}")
 
-        unet, _ = UNet3DConditionModel.from_pretrained(
-            model_config,
-            inference_ckpt_path,
-            device="cpu",
-        )
-        unet = unet.to(dtype=dtype, device="cuda")
+            unet, _ = UNet3DConditionModel.from_pretrained(
+                model_config,
+                inference_ckpt_path,
+                device="cpu",
+            )
+            unet = unet.to(dtype=dtype, device="cuda")
+        else:
+            unet = None
+            logger.info("Skipping UNet loading in lightweight mode")
 
         # 初始化VideoIndexGenerator - 处理相对路径
         connected_json_path = resolve_path(config.get("connected_info_json"))
@@ -215,63 +237,81 @@ class SNNTorchBackend(BaseBackend):
         # 保存配置
         self.video_config = config
 
-        # load TensorRT engine
-        if self.config.fast_engine:
-            logger.info("Loading TensorRT engine... ")
-            device_path = torch.cuda.get_device_name(torch.cuda.current_device()).split()[-1]
-            trt_root_path = os.path.join(self.config.model_path, "tensorrt", device_path)
+        # load TensorRT engine（仅在完整模式下）
+        if not lightweight_mode:
+            if self.config.fast_engine:
+                logger.info("Loading TensorRT engine... ")
+                device_path = torch.cuda.get_device_name(torch.cuda.current_device()).split()[-1]
+                trt_root_path = os.path.join(self.config.model_path, "tensorrt", device_path)
 
-            self.unet.__class__.load_trt = load_trt_unet
-            self.unet.__class__.calculate_max_device_memory = calculate_max_device_memory
-            self.unet.__class__.activate_engine = activate_engine
-            self.unet.__class__.reshape = reshape
-            self.unet.__class__.verbose = False
-            self.unet.__class__.backend = 'torch'
+                self.unet.__class__.load_trt = load_trt_unet
+                self.unet.__class__.calculate_max_device_memory = calculate_max_device_memory
+                self.unet.__class__.activate_engine = activate_engine
+                self.unet.__class__.reshape = reshape
+                self.unet.__class__.verbose = False
+                self.unet.__class__.backend = 'torch'
 
-            self.vae.__class__.load_trt = load_trt_vae
-            self.vae.__class__.calculate_max_device_memory = calculate_max_device_memory
-            self.vae.__class__.activate_engine = activate_engine
-            self.vae.__class__.reshape = reshape
-            self.vae.__class__.verbose = False
-            self.vae.__class__.backend = 'torch'
+                self.vae.__class__.load_trt = load_trt_vae
+                self.vae.__class__.calculate_max_device_memory = calculate_max_device_memory
+                self.vae.__class__.activate_engine = activate_engine
+                self.vae.__class__.reshape = reshape
+                self.vae.__class__.verbose = False
+                self.vae.__class__.backend = 'torch'
 
-            self.vae.__class__.decode_latents = decode_latents
-            self.vae.__class__.prepare_mask_latents = prepare_mask_latents
-            self.vae.__class__.prepare_image_latents = prepare_image_latents
+                self.vae.__class__.decode_latents = decode_latents
+                self.vae.__class__.prepare_mask_latents = prepare_mask_latents
+                self.vae.__class__.prepare_image_latents = prepare_image_latents
 
-            # Only support batch size 1 for now
-            batch_size = 1
+                # Only support batch size 1 for now
+                batch_size = 1
 
-            trt_model_list = [
-                self.unet,
-                self.vae
-            ]
+                trt_model_list = [
+                    self.unet,
+                    self.vae
+                ]
 
-            for item in trt_model_list:
-                item.load_trt(trt_root_path, batch_size, use_cuda_graph=True, verbose=False)
+                for item in trt_model_list:
+                    item.load_trt(trt_root_path, batch_size, use_cuda_graph=True, verbose=False)
 
-            max_device_memory = 0
-            for item in trt_model_list:
-                max_device_memory = max(
-                    max_device_memory, item.calculate_max_device_memory()
-                )
+                max_device_memory = 0
+                for item in trt_model_list:
+                    max_device_memory = max(
+                        max_device_memory, item.calculate_max_device_memory()
+                    )
 
-            _, shared_device_memory = cudart.cudaMalloc(max_device_memory)
-            for item in trt_model_list:
-                item.activate_engine(shared_device_memory, batch_size)
+                _, shared_device_memory = cudart.cudaMalloc(max_device_memory)
+                for item in trt_model_list:
+                    item.activate_engine(shared_device_memory, batch_size)
 
-            logger.info("TensorRT models loaded successfully")
+                logger.info("TensorRT models loaded successfully")
+            else:
+                self.unet.__class__.verbose = False
+                self.unet.__class__.backend = 'torch'
+                self.vae.__class__.verbose = False
+                self.vae.__class__.backend = 'torch'
         else:
-            self.unet.__class__.verbose = False
-            self.unet.__class__.backend = 'torch'
-            self.vae.__class__.verbose = False
-            self.vae.__class__.backend = 'torch'
+            logger.info("Skipping TensorRT setup in lightweight mode")
 
-        logger.info("LatentSync models initialized successfully")
+        if lightweight_mode:
+            logger.info("Lightweight LatentSync models initialized successfully")
+        else:
+            logger.info("LatentSync models initialized successfully")
 
-    def _init_pipeline(self, config: Dict):
+    def _init_lightweight_pipeline(self, config: Dict):
+        """初始化轻量级pipeline（仅用于预处理和后处理）"""
+        logger.info("Initializing lightweight LatentSync pipeline...")
+        
+        # 调用修改后的_init_pipeline方法，传入lightweight_mode=True
+        self._init_pipeline(config, lightweight_mode=True)
+        
+        logger.info("Lightweight LatentSync pipeline initialized successfully")
+
+    def _init_pipeline(self, config: Dict, lightweight_mode: bool = False):
         """初始化pipeline"""
-        logger.info("Initializing LatentSync pipeline...")
+        if lightweight_mode:
+            logger.info("Initializing lightweight LatentSync pipeline...")
+        else:
+            logger.info("Initializing LatentSync pipeline...")
 
         # 创建pipeline
         self.pipeline = LipsyncPipeline(
@@ -280,10 +320,11 @@ class SNNTorchBackend(BaseBackend):
             unet=self.unet,
             scheduler=self.scheduler,
             video_index_generator=self.video_index_generator,
+            lightweight_mode=lightweight_mode,
         ).to("cuda")
 
-        # 配置DiyCache
-        if config.get("enable_diycache", False):
+        # 配置DiyCache（仅在完整模式下）
+        if not lightweight_mode and config.get("enable_diycache", False):
             logger.info("Enabling DiyCache...")
             setup_diycache_unet(
                 unet=self.unet,
@@ -292,7 +333,10 @@ class SNNTorchBackend(BaseBackend):
                 num_steps=config.get("inference_steps", 20)
             )
 
-        logger.info("LatentSync pipeline initialized successfully")
+        if lightweight_mode:
+            logger.info("Lightweight LatentSync pipeline initialized successfully")
+        else:
+            logger.info("LatentSync pipeline initialized successfully")
 
     @NVTXContext
     def model_inference_by_chunk(
@@ -342,7 +386,14 @@ class SNNTorchBackend(BaseBackend):
 
     def get_pipeline(self):
         """获取pipeline实例，供外部使用"""
-        return self.pipeline
+        if hasattr(self, 'pipeline') and self.pipeline is not None:
+            return self.pipeline
+        
+        # 如果没有pipeline，说明初始化有问题
+        if self.lightweight_mode:
+            raise RuntimeError("Lightweight pipeline not initialized. This should not happen.")
+        else:
+            raise RuntimeError("Full pipeline not initialized. This should not happen.")
 
     def get_video_config(self):
         """获取视频配置"""

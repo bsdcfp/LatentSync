@@ -106,7 +106,7 @@ class Processor(BaseProcessor):
 
         with MonitorTimer("predictor"):
             try:
-                # NOTE: 执行单个chunk的推理
+                # NOTE: 使用与local_test.py相同的推理方式
                 logger.info(f"Starting chunk inference...")
                 
                 # 添加推理时间监控

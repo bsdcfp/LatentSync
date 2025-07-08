@@ -65,56 +65,60 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
             DPMSolverMultistepScheduler,
         ],
         video_index_generator: VideoIndexGenerator,
+        lightweight_mode: bool = False,
     ):
         super().__init__()
 
-        if hasattr(scheduler.config, "steps_offset") and scheduler.config.steps_offset != 1:
-            deprecation_message = (
-                f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
-                f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
-                "to update the config accordingly as leaving `steps_offset` might led to incorrect results"
-                " in future versions. If you have downloaded this checkpoint from the Hugging Face Hub,"
-                " it would be very nice if you could open a Pull request for the `scheduler/scheduler_config.json`"
-                " file"
-            )
-            deprecate("steps_offset!=1", "1.0.0", deprecation_message, standard_warn=False)
-            new_config = dict(scheduler.config)
-            new_config["steps_offset"] = 1
-            scheduler._internal_dict = FrozenDict(new_config)
+        # 在轻量级模式下，跳过这些检查以避免None值问题
+        if scheduler is not None:
+            if hasattr(scheduler.config, "steps_offset") and scheduler.config.steps_offset != 1:
+                deprecation_message = (
+                    f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
+                    f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
+                    "to update the config accordingly as leaving `steps_offset` might led to incorrect results"
+                    " in future versions. If you have downloaded this checkpoint from the Hugging Face Hub,"
+                    " it would be very nice if you could open a Pull request for the `scheduler/scheduler_config.json`"
+                    " file"
+                )
+                deprecate("steps_offset!=1", "1.0.0", deprecation_message, standard_warn=False)
+                new_config = dict(scheduler.config)
+                new_config["steps_offset"] = 1
+                scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config, "clip_sample") and scheduler.config.clip_sample is True:
-            deprecation_message = (
-                f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
-                " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
-                " config accordingly as not setting `clip_sample` in the config might lead to incorrect results in"
-                " future versions. If you have downloaded this checkpoint from the Hugging Face Hub, it would be very"
-                " nice if you could open a Pull request for the `scheduler/scheduler_config.json` file"
-            )
-            deprecate("clip_sample not set", "1.0.0", deprecation_message, standard_warn=False)
-            new_config = dict(scheduler.config)
-            new_config["clip_sample"] = False
-            scheduler._internal_dict = FrozenDict(new_config)
+            if hasattr(scheduler.config, "clip_sample") and scheduler.config.clip_sample is True:
+                deprecation_message = (
+                    f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
+                    " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
+                    " config accordingly as not setting `clip_sample` in the config might lead to incorrect results in"
+                    " future versions. If you have downloaded this checkpoint from the Hugging Face Hub, it would be very"
+                    " nice if you could open a Pull request for the `scheduler/scheduler_config.json` file"
+                )
+                deprecate("clip_sample not set", "1.0.0", deprecation_message, standard_warn=False)
+                new_config = dict(scheduler.config)
+                new_config["clip_sample"] = False
+                scheduler._internal_dict = FrozenDict(new_config)
 
-        is_unet_version_less_0_9_0 = hasattr(unet.config, "_diffusers_version") and version.parse(
-            version.parse(unet.config._diffusers_version).base_version
-        ) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(unet.config, "sample_size") and unet.config.sample_size < 64
-        if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
-            deprecation_message = (
-                "The configuration file of the unet has set the default `sample_size` to smaller than"
-                " 64 which seems highly unlikely. If your checkpoint is a fine-tuned version of any of the"
-                " following: \n- CompVis/stable-diffusion-v1-4 \n- CompVis/stable-diffusion-v1-3 \n-"
-                " CompVis/stable-diffusion-v1-2 \n- CompVis/stable-diffusion-v1-1 \n- runwayml/stable-diffusion-v1-5"
-                " \n- runwayml/stable-diffusion-inpainting \n you should change 'sample_size' to 64 in the"
-                " configuration file. Please make sure to update the config accordingly as leaving `sample_size=32`"
-                " in the config might lead to incorrect results in future versions. If you have downloaded this"
-                " checkpoint from the Hugging Face Hub, it would be very nice if you could open a Pull request for"
-                " the `unet/config.json` file"
-            )
-            deprecate("sample_size<64", "1.0.0", deprecation_message, standard_warn=False)
-            new_config = dict(unet.config)
-            new_config["sample_size"] = 64
-            unet._internal_dict = FrozenDict(new_config)
+        if unet is not None:
+            is_unet_version_less_0_9_0 = hasattr(unet.config, "_diffusers_version") and version.parse(
+                version.parse(unet.config._diffusers_version).base_version
+            ) < version.parse("0.9.0.dev0")
+            is_unet_sample_size_less_64 = hasattr(unet.config, "sample_size") and unet.config.sample_size < 64
+            if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
+                deprecation_message = (
+                    "The configuration file of the unet has set the default `sample_size` to smaller than"
+                    " 64 which seems highly unlikely. If your checkpoint is a fine-tuned version of any of the"
+                    " following: \n- CompVis/stable-diffusion-v1-4 \n- CompVis/stable-diffusion-v1-3 \n-"
+                    " CompVis/stable-diffusion-v1-2 \n- CompVis/stable-diffusion-v1-1 \n- runwayml/stable-diffusion-v1-5"
+                    " \n- runwayml/stable-diffusion-inpainting \n you should change 'sample_size' to 64 in the"
+                    " configuration file. Please make sure to update the config accordingly as leaving `sample_size=32`"
+                    " in the config might lead to incorrect results in future versions. If you have downloaded this"
+                    " checkpoint from the Hugging Face Hub, it would be very nice if you could open a Pull request for"
+                    " the `unet/config.json` file"
+                )
+                deprecate("sample_size<64", "1.0.0", deprecation_message, standard_warn=False)
+                new_config = dict(unet.config)
+                new_config["sample_size"] = 64
+                unet._internal_dict = FrozenDict(new_config)
 
         self.register_modules(
             vae=vae,
@@ -124,7 +128,14 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
             video_index_generator=video_index_generator,
         )
 
-        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
+        # 保存轻量级模式标志
+        self.lightweight_mode = lightweight_mode
+
+        # 在轻量级模式下，vae可能为None，设置一个默认值
+        if self.vae is not None:
+            self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
+        else:
+            self.vae_scale_factor = 8  # 默认值，用于轻量级模式
 
         self.set_progress_bar_config(desc="Steps")
 
@@ -425,7 +436,7 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
         """
         whisper_chunks = None
         
-        if self.unet.add_audio_layer:
+        if self.lightweight_mode or (self.unet is not None and self.unet.add_audio_layer):
             # 音频特征提取（可能需要GPU）
             if debug:
                 print(f"🎵 开始音频特征提取...")
@@ -468,7 +479,7 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
         padding_frames = 0
         num_inferences = 0
         
-        if self.unet.add_audio_layer and whisper_chunks is not None:
+        if (self.lightweight_mode or (self.unet is not None and self.unet.add_audio_layer)) and whisper_chunks is not None:
             if need_padding_to_16x:
                 original_audio_len = len(whisper_chunks)
                 remainder = original_audio_len % num_frames
@@ -701,7 +712,7 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
         
         # 准备音频嵌入
         audio_embeds = None
-        if self.unet.add_audio_layer and chunk_whisper_features is not None:
+        if (self.lightweight_mode or (self.unet is not None and self.unet.add_audio_layer)) and chunk_whisper_features is not None:
             audio_embeds = torch.stack(chunk_whisper_features)
             audio_embeds = audio_embeds.to(device, dtype=weight_dtype)
             if do_classifier_free_guidance:
@@ -769,6 +780,10 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
                 # 预测噪声
                 if debug:
                     unet_start_time = time.time()
+                
+                # 在轻量级模式下，UNet为None，不能进行推理
+                if self.lightweight_mode:
+                    raise RuntimeError("Cannot perform inference in lightweight mode: UNet is None. This pipeline is only for preprocessing and postprocessing.")
                     
                 noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=audio_embeds).sample
                 
