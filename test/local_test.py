@@ -171,7 +171,8 @@ def video_worker(audio_files, args):
                 config_data['predictors']['snn_torch_predictor']['config_file'] = config_file_path
         
         # 直接使用原始配置文件，命令行参数在SNNTorchBackend中处理
-        config_data['predictors']['snn_torch_predictor']['config_file'] = "models/V1.0_latentsync_video_predictor.json"
+        # 使用绝对路径避免重复拼接
+        config_data['predictors']['snn_torch_predictor']['config_file'] = os.path.join(current_dir, "..", "models", "V1.0_latentsync_video_predictor.json")
         
         # 添加命令行参数到配置中
         config_data['predictors']['snn_torch_predictor'].update({

@@ -39,9 +39,11 @@ class SNNTorchBackend(BaseBackend):
         if not config_file:
             raise ValueError("config_file is required for video generation")
         
-        # 如果config_file是相对路径，拼到当前工作目录
+        # 如果config_file是相对路径，拼到models目录
         if not os.path.isabs(config_file):
-            config_path = os.path.join(os.getcwd(), config_file)
+            # 获取models目录路径
+            models_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "models")
+            config_path = os.path.join(models_dir, config_file)
         else:
             config_path = config_file
         
@@ -284,4 +286,10 @@ class SNNTorchBackend(BaseBackend):
 
     def get_dtype(self):
         """获取数据类型"""
-        return self.dtype 
+        return self.dtype
+    
+    def get_device(self):
+        """获取设备"""
+        return self._device
+
+ 

@@ -22,7 +22,6 @@ from dataclasses import dataclass
 
 from .snn_torch_backend import SNNTorchBackend
 from .snn_fast_backend import SNNFastBackend
-from .snn_video_backend import SNNVideoBackend
 from latentsync import NVTXContext, PROFILER_AVAILABLE
 from latentsync.src.utils.status_code import PI_STATUS_CODE
 
@@ -88,47 +87,7 @@ class SNNPredictor(object):
     
     # DiyCache相关方法已移至SNNTorchBackend中实现
 
-    def predict(
-        self,
-        audio_paths: List[str],
-        output_paths: List[str],
-        mask_output_paths: Optional[List[str]] = None,
-    ):
-        """
-        视频生成预测方法 - 简化为直接调用后端
-        
-        Args:
-            audio_paths: 音频文件路径列表
-            output_paths: 输出视频路径列表
-            mask_output_paths: 输出mask视频路径列表（可选）
-            
-        Returns:
-            tuple: (video_paths: List[str], mask_paths: List[str], status_codes, error_messages: List[str])
-        """
-        with NVTXContext("SNNPredictor.predict_video"):
-            if not hasattr(self, '_has_video_config') or not self._has_video_config:
-                raise ValueError(f"Video prediction not supported for this predictor type: {self._predictor_type}")
-            
-            if not hasattr(self._engine, 'pipeline'):
-                raise ValueError(f"Video prediction not supported for this backend type")
-            
-            with MonitorTimer("predict_video"):
-                # 直接调用后端的forward方法
-                results = self._engine.forward(audio_paths, output_paths, mask_output_paths)
-                
-                # 转换结果格式
-                video_paths = []
-                mask_paths = []
-                status_codes = []
-                error_messages = []
-                
-                for result in results:
-                    video_paths.append(result.get('video_path'))
-                    mask_paths.append(result.get('mask_path'))
-                    status_codes.append(result.get('status_code', 'GENERATION_ERROR'))
-                    error_messages.append(result.get('error_message'))
-                
-                return video_paths, mask_paths, status_codes, error_messages
+
 
 
 

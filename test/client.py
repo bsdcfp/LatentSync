@@ -1,14 +1,13 @@
 ######################################################################
 #
-# Copyright (c) 2024 Shopee Inc. All Rights Reserved.
+# Copyright (c) 2025 Shopee Inc. All Rights Reserved.
 #
 ######################################################################
 
 """
 file: client.py
-author: min.yang@shopee.com
-date: 2024-04-16 14:33:31
-brief: HTTP Client for Product Scene Image Generation Testing
+
+brief: HTTP Client for Video Generation Testing
 """
 
 import os
@@ -35,6 +34,7 @@ import shutil
 import time
 import cv2
 import numpy as np
+import torch
 from statistics import mean, stdev
 
 import requests
@@ -42,49 +42,122 @@ import pandas as pd
 import tqdm
 from scipy.spatial import distance
 
-# 导入图片下载工具
-from productscene.src.utils.loader import download_sp_image
+# 导入视频生成相关模块
+from latentsync.backends.snn_predictor import SNNPredictor
 
 local_url = "http://127.0.0.1:80/api/process"
-remote_url = "http://us3.aip.mlp.shopee.io/aip-svc-100111/aip-aigc-productbggen-fast/api/process"
+remote_url = ""
 
 # 全局时间统计列表
 time_list = []
 
-def download_and_convert_to_base64(image_id):
+# 全局predictor实例
+_global_predictor = None
+
+def get_predictor(config_file: str) -> SNNPredictor:
     """
-    下载图片并转换为base64编码的二进制数据
+    获取全局predictor实例，如果不存在则初始化
     
     Args:
-        image_id: 图片ID
+        config_file: 配置文件路径
         
     Returns:
-        str: base64编码的图片数据，失败时返回None
+        SNNPredictor: predictor实例
     """
-    try:
-        # 使用loader.py中的download_sp_image接口下载BGRA格式图片
-        image_array = download_sp_image(image_id, cv2.IMREAD_UNCHANGED)
+    global _global_predictor
+    if _global_predictor is None:
+        print("Initializing global SNNPredictor...")
+        _global_predictor = SNNPredictor(config_file)
+        print("✅ Global SNNPredictor initialized successfully")
+    return _global_predictor
+
+def preprocess_video_data(audio_path: str, config_file: str) -> dict:
+    """
+    视频数据前处理
+    
+    Args:
+        audio_path: 音频文件路径
+        config_file: 配置文件路径
         
-        if image_array is None:
-            print(f"[ERROR] Failed to download image: {image_id}")
-            return None
+    Returns:
+        dict: 预处理后的数据（原始格式，不序列化）
+    """
+    # 使用全局predictor实例
+    predictor = get_predictor(config_file)
+    
+    # 执行前处理
+    print(f"    - Calling predictor._preprocess_video_data...")
+    preprocess_start = time.time()
+    preprocess_data = predictor._preprocess_video_data(audio_path)
+    preprocess_end = time.time()
+    print(f"    - Raw preprocessing completed in {preprocess_end - preprocess_start:.2f}s")
+    
+    return preprocess_data
+
+def postprocess_video_data(preprocess_data: dict, synced_video_frames: list, config_file: str) -> np.ndarray:
+    """
+    视频数据后处理
+    
+    Args:
+        preprocess_data: 预处理数据
+        synced_video_frames: 推理结果列表（从HTTP响应中获取的序列化数据）
+        config_file: 配置文件路径
         
-        # 将numpy数组编码为PNG格式的字节数据
-        success, buffer = cv2.imencode('.png', image_array)
-        if not success:
-            print(f"[ERROR] Failed to encode image: {image_id}")
-            return None
-        
-        # 转换为base64编码
-        image_base64 = base64.b64encode(buffer.tobytes()).decode('utf-8')
-        
-        print(f"[INFO] Downloaded and encoded image {image_id[:20]}...: shape {image_array.shape}, "
-              f"dtype {image_array.dtype}, base64 length: {len(image_base64)} chars")
-        return image_base64
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to download and convert image {image_id}: {e}")
-        return None
+    Returns:
+        np.ndarray: 最终的视频帧数组
+    """
+    # 使用全局predictor实例
+    predictor = get_predictor(config_file)
+    
+    # 验证输入数据
+    print(f"[POSTPROCESS] Input validation:")
+    print(f"  - synced_video_frames length: {len(synced_video_frames)}")
+    print(f"  - original_video_frames length: {len(preprocess_data['original_video_frames'])}")
+    print(f"  - boxes length: {len(preprocess_data['boxes'])}")
+    print(f"  - affine_matrices length: {len(preprocess_data['affine_matrices'])}")
+    print(f"  - original_faces_len: {preprocess_data['original_faces_len']}")
+    
+    # 将序列化的帧数据转换回torch.Tensor
+    torch_frames = []
+    for i, frame_data in enumerate(synced_video_frames):
+        # frame_data是从JSON反序列化后的Python列表
+        frame_np = np.array(frame_data, dtype=np.float32)
+        frame_tensor = torch.from_numpy(frame_np)
+        torch_frames.append(frame_tensor)
+        print(f"  - Chunk {i+1}: frame shape {frame_tensor.shape}")
+    
+    # 验证帧顺序
+    total_frames = sum(frame.shape[0] if len(frame.shape) > 0 else 1 for frame in torch_frames)
+    print(f"  - Total frames from chunks: {total_frames}")
+    print(f"  - Expected frames: {preprocess_data['original_faces_len']}")
+    
+    if total_frames != preprocess_data['original_faces_len']:
+        print(f"[WARNING] Frame count mismatch! Expected {preprocess_data['original_faces_len']}, got {total_frames}")
+    
+    # 执行后处理
+    final_video_frames = predictor._postprocess_video_data(preprocess_data, torch_frames)
+    
+    print(f"[POSTPROCESS] Output validation:")
+    print(f"  - final_video_frames shape: {final_video_frames.shape}")
+    
+    return final_video_frames
+
+def save_video_output(preprocess_data: dict, final_video_frames: np.ndarray, video_out_path: str, mask_output_path: str = None, config_file: str = None):
+    """
+    保存视频输出
+    
+    Args:
+        preprocess_data: 预处理数据
+        final_video_frames: 最终视频帧数组
+        video_out_path: 视频输出路径
+        mask_output_path: mask视频输出路径（可选）
+        config_file: 配置文件路径
+    """
+    # 使用全局predictor实例
+    predictor = get_predictor(config_file)
+    
+    # 执行保存
+    predictor._save_video_output(preprocess_data, final_video_frames, video_out_path, mask_output_path)
 
 def collect_timing_stats():
     """收集和显示时间统计信息"""
@@ -119,16 +192,15 @@ def save_results_to_csv(results_data, output_dir, args):
     
     # 生成输出文件名
     url_type = "local" if args.local_url else "remote"
-    pre_download_suffix = "_predownload" if args.pre_download else ""
-    csv_filename = f"client_test_results_{url_type}_list{args.list_size}_iter{args.test_num}{pre_download_suffix}.csv"
+    csv_filename = f"video_gen_test_results_{url_type}_iter{args.test_num}.csv"
     output_path = os.path.join(output_dir, csv_filename)
     
     # 保存到CSV
     df.to_csv(output_path, index=False)
     print(f"[INFO] Results saved to: {output_path}")
 
-def make_request(url, request_data, test_id, args):
-    """发送单个HTTP请求并处理响应"""
+def make_video_generation_request(url, request_data, test_id, args):
+    """发送单个视频生成HTTP请求并处理响应"""
     try:
         op_begin = time.time()
         result = requests.post(url=url, data=request_data, timeout=300)  # 添加超时设置
@@ -138,17 +210,28 @@ def make_request(url, request_data, test_id, args):
         time_list.append(request_time)
         
         if result.status_code == 200:
-            results = result.json()["result"]
-            print(f"[TEST {test_id}] SUCCESS - Request time: {request_time:.2f} ms")
-            
-            # 返回成功结果
-            return {
-                'test_id': test_id,
-                'status': 'SUCCESS',
-                'request_time_ms': request_time,
-                'http_status': result.status_code,
-                'response_data': results
-            }
+            response_json = result.json()
+            if "result" in response_json and response_json["result"] is not None:
+                results = response_json["result"]
+                print(f"[TEST {test_id}] SUCCESS - Request time: {request_time:.2f} ms")
+                
+                # 返回成功结果
+                return {
+                    'test_id': test_id,
+                    'status': 'SUCCESS',
+                    'request_time_ms': request_time,
+                    'http_status': result.status_code,
+                    'response_data': results
+                }
+            else:
+                print(f"[TEST {test_id}] FAILED - No result in response: {response_json}")
+                return {
+                    'test_id': test_id,
+                    'status': 'FAILED',
+                    'request_time_ms': request_time,
+                    'http_status': result.status_code,
+                    'error_message': f"No result in response: {response_json}"
+                }
         else:
             print(f"[TEST {test_id}] FAILED - HTTP {result.status_code}: {result.text}")
             return {
@@ -170,228 +253,286 @@ def make_request(url, request_data, test_id, args):
         }
 
 def main():
-    parser = argparse.ArgumentParser(description='HTTP Client for Product Scene Image Generation Testing')
-    parser.add_argument('--csv', type=str, default='examples/test_case/V2.6_online_testdata.csv', 
-                       help='Path to the CSV file containing test data')
+    parser = argparse.ArgumentParser(description='HTTP Client for Video Generation Testing')
+    parser.add_argument('--audio-file', type=str, required=True,
+                       help='Path to the audio file for video generation')
     parser.add_argument('--output-dir', type=str, default='output', 
                        help='Path to the output directory')
-    parser.add_argument('--list-size', type=int, default=1, 
-                       help='Number of items in input image list size')
+    parser.add_argument('--config-file', type=str, default='models/config.yaml',
+                       help='Path to the config file')
     parser.add_argument('--local-url', action='store_true', default=False,
                        help='Use local service instead of remote service')
-    # parser.add_argument('--download-result', action='store_true', default=False,
-    #                    help='Download result to local storage')
     parser.add_argument('--test-num', type=int, default=2, 
                        help='Number of test iterations to run')
-    parser.add_argument('--data-rows', type=int, default=5, 
-                       help='Number of data rows to use from CSV')
-    parser.add_argument('--random-data', action='store_true', default=False,
-                       help='Use random data selection instead of sequential')
     parser.add_argument('--save-results', action='store_true', default=False,
                        help='Save test results to CSV file')
-    parser.add_argument('--pre-download', action='store_true', default=False,
-                       help='Pre-download images and send as base64 binary data instead of image IDs')
+    
+    # 视频生成参数
+    parser.add_argument('--target-fps', type=int, default=25,
+                       help='Target FPS for video generation')
+    parser.add_argument('--inference-steps', type=int, default=20,
+                       help='Number of inference steps')
+    parser.add_argument('--guidance-scale', type=float, default=1.0,
+                       help='Guidance scale')
+    parser.add_argument('--seed', type=int, default=1247,
+                       help='Random seed')
+    parser.add_argument('--debug-pipeline', action='store_true', default=False,
+                       help='Enable pipeline debug mode')
+    parser.add_argument('--debug-video-merger', action='store_true', default=False,
+                       help='Enable video merger debug mode')
+    
     args = parser.parse_args()
-
-    # 不需要转换字符串参数为布尔值，store_true自动处理
-    # args.local_url = args.local_url.lower() == 'true'
-    # args.download_result = args.download_result.lower() == 'true'
-    # args.random_data = args.random_data.lower() == 'true'
-    # args.save_results = args.save_results.lower() == 'true'
-    # args.pre_download = args.pre_download.lower() == 'true'
 
     # 创建输出目录
     os.makedirs(args.output_dir, exist_ok=True)
-    
-    # 设置图像缓存目录为 output_dir 的子目录
-    image_cache_dir = os.path.join(args.output_dir, "image_cache")
-    os.environ["PI_IMAGE_CACHE"] = image_cache_dir
-    os.makedirs(image_cache_dir, exist_ok=True)
 
-    # 读取测试数据
-    if not os.path.exists(args.csv):
-        print(f"[ERROR] CSV file not found: {args.csv}")
+    # 检查音频文件
+    if not os.path.exists(args.audio_file):
+        print(f"❌ Error: Audio file does not exist: {args.audio_file}")
         return
     
-    df = pd.read_csv(args.csv)
-    
-    # 准备测试数据
-    available_rows = min(len(df), args.data_rows)
-    test_data = df[:available_rows].to_dict('records')
-    
-    # 打印配置信息（按照local_test.py的风格）
+    # 检查音频文件格式
+    audio_extensions = ['.mp3', '.wav', '.m4a', '.flac', '.aac']
+    file_ext = os.path.splitext(args.audio_file)[1].lower()
+    if file_ext not in audio_extensions:
+        print(f"❌ Error: File is not a supported audio format: {args.audio_file}")
+        print(f"Supported formats: {audio_extensions}")
+        return
+
+    # 打印配置信息
     print("=" * 60)
-    print(f"[CONFIG] HTTP Client Test Configuration")
-    print(f"  CSV file: {args.csv}")
+    print(f"[CONFIG] Video Generation HTTP Client Test Configuration")
+    print(f"  Audio file: {args.audio_file}")
     print(f"  Output directory: {args.output_dir}")
-    print(f"  Image cache directory: {image_cache_dir}")
+    print(f"  Config file: {args.config_file}")
     print(f"  Test iterations: {args.test_num}")
-    print(f"  List size: {args.list_size}")
     print(f"  Using local URL: {args.local_url}")
-    # print(f"  Download result: {args.download_result}")
     print(f"  Save results: {args.save_results}")
-    print(f"  Pre-download images: {args.pre_download}")
-    print(f"  Data rows available: {len(df)}")
-    print(f"  Data rows to use: {available_rows}")
-    print(f"  Random data selection: {args.random_data}")
+    print(f"  Target FPS: {args.target_fps}")
+    print(f"  Inference steps: {args.inference_steps}")
+    print(f"  Guidance scale: {args.guidance_scale}")
+    print(f"  Seed: {args.seed}")
+    print(f"  Debug pipeline: {args.debug_pipeline}")
+    print(f"  Debug video merger: {args.debug_video_merger}")
     print("=" * 60)
     
     # 确定URL
-    url = local_url if args.local_url else remote_url
-    print(f"[URL] Target endpoint: {url}")
+    if args.local_url:
+        url = local_url
+        print(f"[URL] Using LOCAL endpoint: {url}")
+    else:
+        url = remote_url
+        print(f"[URL] Using REMOTE endpoint: {url}")
 
     # 初始化统计变量
     successful_tests = 0
     failed_tests = 0
     results_data = []
     
-    print(f"\n[INFO] Starting {args.test_num} test iterations with varying data...")
+    print(f"\n[INFO] Starting {args.test_num} test iterations...")
     
-    # 运行测试循环
+    # 预初始化predictor
+    print("Pre-initializing SNNPredictor for better performance...")
+    init_start_time = time.time()
+    get_predictor(args.config_file)
+    init_time = time.time() - init_start_time
+    print(f"✅ Predictor initialization completed in {init_time:.2f}s")
+    
+    # 运行测试循环 - 每次测试都处理完整的音频（所有chunks）
     for i in tqdm.tqdm(range(args.test_num), desc="Running tests"):
         test_id = f"{i+1}/{args.test_num}"
-        print(f"\n[TEST {test_id}] Starting test iteration...")
+        print(f"\n[TEST {test_id}] Starting complete audio processing...")
         
-        # 选择测试数据
-        if args.random_data:
-            selected_record = random.choice(test_data)
-            print(f"[TEST {test_id}] Using random data (row from first {available_rows} rows)")
-        else:
-            record_index = i % available_rows
-            selected_record = test_data[record_index]
-            print(f"[TEST {test_id}] Using sequential data (row {record_index + 1}/{available_rows})")
-        
-        fg_rgba_id = selected_record['aigc_segmentation_image_id']
-        generated_config = selected_record['generated_config']
-        
-        # 根据pre_download参数决定如何处理图片数据
-        if args.pre_download:
-            print(f"[TEST {test_id}] Pre-downloading image: {fg_rgba_id[:50]}{'...' if len(fg_rgba_id) > 50 else ''}")
+        try:
+            # 步骤1: 前处理
+            print(f"[TEST {test_id}] Step 1: Preprocessing data...")
+            preprocess_start_time = time.time()
             
-            # 下载图片并转换为base64
-            image_base64_list = []
-            download_success = True
+            # 详细监控前处理各个步骤
+            print(f"[TEST {test_id}]   - Starting preprocessing...")
+            preprocess_data = preprocess_video_data(args.audio_file, args.config_file)
             
-            for _ in range(args.list_size):
-                image_base64 = download_and_convert_to_base64(fg_rgba_id)
-                if image_base64 is None:
-                    print(f"[TEST {test_id}] FAILED - Failed to download image: {fg_rgba_id}")
-                    download_success = False
-                    break
-                image_base64_list.append(image_base64)
+            preprocess_time = time.time() - preprocess_start_time
+            print(f"[TEST {test_id}] Preprocessing completed in {preprocess_time:.2f}s")
             
-            if not download_success:
-                failed_tests += 1
-                # 记录失败结果
-                if args.save_results:
-                    result_record = {
-                        'test_iteration': i + 1,
-                        'image_id': fg_rgba_id,
-                        'list_size': args.list_size,
-                        'request_time_ms': 0,
-                        'status': 'FAILED',
-                        'http_status': 0,
-                        'generated_config': generated_config,
-                        'error_message': 'Failed to download image'
+            # 检查前处理数据的结构
+            if preprocess_data:
+                print(f"[TEST {test_id}]   - Preprocess data keys: {list(preprocess_data.keys())}")
+                if 'faces_by_chunk' in preprocess_data:
+                    print(f"[TEST {test_id}]   - faces_by_chunk length: {len(preprocess_data['faces_by_chunk'])}")
+                if 'whisper_chunks_by_chunk' in preprocess_data:
+                    print(f"[TEST {test_id}]   - whisper_chunks_by_chunk length: {len(preprocess_data['whisper_chunks_by_chunk'])}")
+            
+            # 步骤2: 逐个chunk发送推理请求
+            print(f"[TEST {test_id}] Step 2: Processing all chunks...")
+            
+            num_chunks = len(preprocess_data['faces_by_chunk'])
+            synced_video_frames = [None] * num_chunks  # 预分配列表，确保顺序
+            chunk_results = []  # 收集所有chunk的结果
+            
+            for chunk_idx in range(num_chunks):
+                print(f"[TEST {test_id}]   - Processing chunk {chunk_idx+1}/{num_chunks}...")
+                
+                # 获取当前chunk的数据
+                chunk_faces = preprocess_data['faces_by_chunk'][chunk_idx]
+                chunk_whisper = preprocess_data['whisper_chunks_by_chunk'][chunk_idx]
+                
+                # 转换为可序列化格式 - 只序列化当前chunk
+                print(f"[TEST {test_id}]     - Serializing chunk {chunk_idx+1} data...")
+                serialize_start = time.time()
+                
+                if isinstance(chunk_faces, torch.Tensor):
+                    print(f"[TEST {test_id}]       - Converting faces tensor: {chunk_faces.shape}")
+                    chunk_faces_serializable = chunk_faces.cpu().numpy().tolist()
+                else:
+                    chunk_faces_serializable = chunk_faces
+                    
+                if isinstance(chunk_whisper, list) and len(chunk_whisper) > 0:
+                    print(f"[TEST {test_id}]       - Converting whisper features: {len(chunk_whisper)} items")
+                    if isinstance(chunk_whisper[0], torch.Tensor):
+                        chunk_whisper_serializable = [w.cpu().numpy().tolist() for w in chunk_whisper]
+                    else:
+                        chunk_whisper_serializable = chunk_whisper
+                else:
+                    chunk_whisper_serializable = chunk_whisper
+                
+                serialize_time = time.time() - serialize_start
+                print(f"[TEST {test_id}]     - Chunk {chunk_idx+1} serialization completed in {serialize_time:.2f}s")
+                
+                # 构建单个chunk的请求
+                chunk_request_payload = json.dumps({
+                    "logid": 1234567 + i + chunk_idx * 1000,
+                    "clientip": "",
+                    "data": {
+                        "chunk_faces": chunk_faces_serializable,
+                        "chunk_whisper_features": chunk_whisper_serializable,
+                        "num_frames": 16,
+                        "num_inference_steps": args.inference_steps,
+                        "guidance_scale": args.guidance_scale,
+                        "weight_dtype": "float16",
+                        "eta": 0.0,
+                        "height": 256,
+                        "width": 256,
+                        "debug": args.debug_pipeline
                     }
-                    results_data.append(result_record)
-                continue
+                })
             
-            # 使用base64编码的图片数据
-            aigc_input = image_base64_list
-            print(f"[TEST {test_id}] Using pre-downloaded base64 data: {len(image_base64_list)} images")
-        else:
-            # 使用图片ID
-            aigc_input = [fg_rgba_id] * args.list_size
-            print(f"[TEST {test_id}] Using image ID: {fg_rgba_id[:50]}{'...' if len(fg_rgba_id) > 50 else ''}")
-        
-        # 构建请求
-        request_payload = json.dumps({
-            "logid": 1234567 + i,  # 每次使用不同的logid
-        "clientip": "",
-        "data": {
-                "aigc_segmentation_image_id": aigc_input,
-                "generated_config": [generated_config] * args.list_size,
-            }
-        })
-        
-        # 显示请求信息
-        if i == 0:
-            if args.pre_download:
-                print(f"[TEST {test_id}] Sample request structure (with base64 data): logid, clientip, data keys")
-                print(f"[TEST {test_id}] Base64 data lengths: {[len(img) for img in aigc_input]} chars")
-            else:
-                print(f"[TEST {test_id}] Sample request structure: {request_payload[:200]}...")
-        else:
-            if not args.pre_download:
-                print(f"[TEST {test_id}] Image ID: {fg_rgba_id[:50]}{'...' if len(fg_rgba_id) > 50 else ''}")
-            # 对于pre_download模式，不再打印具体信息，避免日志过长
-        
-        # 发送请求
-        result = make_request(url, request_payload, test_id, args)
-        
-        # 统计结果
-        if result['status'] == 'SUCCESS':
+                # 发送单个chunk的HTTP请求
+                chunk_result = make_video_generation_request(url, chunk_request_payload, f"{test_id}_chunk{chunk_idx+1}", args)
+                chunk_results.append(chunk_result)  # 收集结果
+                
+                if chunk_result['status'] == 'SUCCESS':
+                    # 从响应中获取推理结果
+                    response_data = chunk_result['response_data']
+                    if response_data is None:
+                        raise Exception(f"Chunk {chunk_idx+1} returned None response_data")
+                    
+                    decoded_latents = response_data.get('decoded_latents')
+                    if decoded_latents is None:
+                        raise Exception(f"Chunk {chunk_idx+1} returned None decoded_latents")
+                    
+                    # 转换回tensor格式
+                    if isinstance(decoded_latents, list):
+                        frame_tensor = torch.tensor(decoded_latents, dtype=torch.float32)
+                    else:
+                        frame_tensor = decoded_latents
+                    
+                    # 确保按正确顺序存储结果
+                    synced_video_frames[chunk_idx] = frame_tensor
+                    print(f"[TEST {test_id}]   - Chunk {chunk_idx+1} completed successfully and stored at position {chunk_idx}")
+                else:
+                    print(f"[TEST {test_id}]   - Chunk {chunk_idx+1} failed: {chunk_result.get('error_message', 'Unknown error')}")
+                    # 如果某个chunk失败，整个测试失败
+                    raise Exception(f"Chunk {chunk_idx+1} inference failed")
+            
+            # 验证所有chunks都已处理完成
+            if None in synced_video_frames:
+                missing_chunks = [i for i, frame in enumerate(synced_video_frames) if frame is None]
+                raise Exception(f"Missing chunks: {missing_chunks}")
+            
+            print(f"[TEST {test_id}] All chunks processed successfully, total: {len(synced_video_frames)}")
+            print(f"[TEST {test_id}] Frame order verification:")
+            for i, frame in enumerate(synced_video_frames):
+                if frame is not None:
+                    print(f"[TEST {test_id}]   - Chunk {i+1}: frame shape {frame.shape}")
+                else:
+                    print(f"[TEST {test_id}]   - Chunk {i+1}: MISSING")
+            
+            # 步骤3: 后处理
+            print(f"[TEST {test_id}] Step 3: Postprocessing video...")
+            postprocess_start_time = time.time()
+            
+            # 直接使用已有的preprocess_data，避免重新前处理
+            print(f"[TEST {test_id}]   - Using existing preprocess data for postprocessing...")
+            
+            # 执行后处理
+            final_video_frames = postprocess_video_data(preprocess_data, synced_video_frames, args.config_file)
+            postprocess_time = time.time() - postprocess_start_time
+            print(f"[TEST {test_id}] Postprocessing completed in {postprocess_time:.2f}s")
+            
+            # 步骤4: 保存输出
+            print(f"[TEST {test_id}] Step 4: Saving output...")
+            audio_basename = os.path.splitext(os.path.basename(args.audio_file))[0]
+            output_path = os.path.join(args.output_dir, f"{audio_basename}_generated_{i}.mp4")
+            mask_output_path = os.path.join(args.output_dir, f"{audio_basename}_mask_{i}.mp4")
+            
+            save_video_output(preprocess_data, final_video_frames, output_path, mask_output_path, args.config_file)
+            print(f"[TEST {test_id}] Output saved to: {output_path}")
+            
             successful_tests += 1
             
-            # 只在第一次测试时显示详细结果
-            if i == 0:
-                # 不直接打印response_data，避免打印大量base64数据
-                response_keys = list(result['response_data'].keys()) if 'response_data' in result else []
-                print(f"[TEST {test_id}] Response keys: {response_keys}")
-                if 'response_data' in result:
-                    # 只显示status_code等关键信息
-                    status_codes = result['response_data'].get('status_code', [])
-                    print(f"[TEST {test_id}] Status codes: {status_codes}")
-                    # 显示生成的image_id信息（但不显示完整内容，避免过长）
-                    if 'aigc_generated_image_id' in result['response_data']:
-                        gen_ids = result['response_data']['aigc_generated_image_id']
-                        if isinstance(gen_ids, list) and gen_ids:
-                            print(f"[TEST {test_id}] Generated {len(gen_ids)} image(s)")
-                        else:
-                            print(f"[TEST {test_id}] Generated image result available")
-            else:
-                # 后续测试只显示关键信息
-                if 'response_data' in result and 'status_code' in result['response_data']:
-                    print(f"[TEST {test_id}] Status codes: {result['response_data']['status_code']}")
-        else:
-            failed_tests += 1
-        
-        # 保存结果数据
-        if args.save_results:
-            result_record = {
-                'test_iteration': i + 1,
-                'image_id': fg_rgba_id,
-                'list_size': args.list_size,
-                'pre_download': args.pre_download,
-                'request_time_ms': result['request_time_ms'],
-                'status': result['status'],
-                'http_status': result['http_status'],
-                'generated_config': generated_config
-            }
+            # 记录成功结果
+            if args.save_results:
+                result_record = {
+                    'test_iteration': i + 1,
+                    'audio_file': args.audio_file,
+                    'preprocess_time_s': preprocess_time,
+                    'inference_time_ms': sum([r.get('request_time_ms', 0) for r in chunk_results]) if 'chunk_results' in locals() else 0,
+                    'postprocess_time_s': postprocess_time,
+                    'total_time_s': preprocess_time + postprocess_time,
+                    'status': 'SUCCESS',
+                    'output_path': output_path,
+                    'mask_output_path': mask_output_path,
+                    'inference_steps': args.inference_steps,
+                    'guidance_scale': args.guidance_scale
+                }
+                results_data.append(result_record)
             
-            if result['status'] == 'SUCCESS' and 'response_data' in result:
-                result_record.update({
-                    'aigc_generated_image_id': result['response_data'].get('aigc_generated_image_id', [''])[0] if isinstance(result['response_data'].get('aigc_generated_image_id'), list) else result['response_data'].get('aigc_generated_image_id', ''),
-                    'aigc_generated_mask_id': result['response_data'].get('aigc_generated_mask_id', [''])[0] if isinstance(result['response_data'].get('aigc_generated_mask_id'), list) else result['response_data'].get('aigc_generated_mask_id', ''),
-                    'result_status_code': result['response_data'].get('status_code', [''])[0] if isinstance(result['response_data'].get('status_code'), list) else result['response_data'].get('status_code', '')
-                })
-            else:
-                result_record['error_message'] = result.get('error_message', '')
-            
-            results_data.append(result_record)
 
-    # 显示最终统计信息（按照local_test.py的风格）
+                    
+        except Exception as e:
+            failed_tests += 1
+            print(f"[TEST {test_id}] Exception occurred: {str(e)}")
+            
+            # 记录异常结果
+            if args.save_results:
+                result_record = {
+                    'test_iteration': i + 1,
+                    'audio_file': args.audio_file,
+                    'preprocess_time_s': preprocess_time if 'preprocess_time' in locals() else 0,
+                    'inference_time_ms': 0,
+                    'postprocess_time_s': 0,
+                    'total_time_s': preprocess_time if 'preprocess_time' in locals() else 0,
+                    'status': 'EXCEPTION',
+                    'output_path': '',
+                    'mask_output_path': '',
+                    'inference_steps': args.inference_steps,
+                    'guidance_scale': args.guidance_scale,
+                    'error_message': str(e)
+                }
+                results_data.append(result_record)
+
+    # 显示最终统计信息
     print("\n" + "=" * 60)
-    print(f"[SUMMARY] HTTP Client Test Results")
+    print(f"[SUMMARY] Video Generation HTTP Client Test Results")
     print("=" * 60)
     print(f"Total tests: {args.test_num}")
     print(f"Successful: {successful_tests}")
     print(f"Failed: {failed_tests}")
     print(f"Success rate: {(successful_tests/args.test_num)*100:.1f}%")
-    print(f"Data variety: {available_rows} different data records used")
+    print(f"Predictor initialization time: {init_time:.2f}s")
     print(f"Target URL: {url}")
-    print(f"Pre-download mode: {args.pre_download}")
+    print(f"Audio file: {args.audio_file}")
     
     # 显示详细时间统计
     collect_timing_stats()
