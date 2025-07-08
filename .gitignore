@@ -21,7 +21,6 @@ wandb/
 /output
 /outputs
 /validation
-/models/
 /venv/
 /detect_results/
 /temp
