@@ -25,13 +25,22 @@ from oneservice import BaseProcessor, ResParams, MonitorTimer, ReqParams, server
 
 class Processor(BaseProcessor):
     def __init__(self, config_file: str):
-        # NOTE: 创建视频生成Predictor
-        self._video_predictor = SNNPredictor(config_file=config_file)
+        # NOTE: 创建视频生成Predictor - 使用完整模式进行推理
+        self._video_predictor = SNNPredictor(config_file=config_file, lightweight_mode=False)
+        
+        # 简单的初始化，不需要复杂的内存池
+        
+        # 执行预热推理，避免第一次请求的延迟
+        logger.info("Performing warmup inference to initialize models...")
+        self._warmup_inference()
+        logger.info("Warmup inference completed")
 
     def __call__(self, req_params: ReqParams, res_params: ResParams):
         # NOTE: 解析请求参数获取推理所需参数
         with MonitorTimer("decode"):
-            data = req_params.data
+            # 获取实际的请求数据 - 客户端发送的是嵌套结构
+            request_data = req_params.data
+            data = request_data.get("data", request_data)  # 兼容两种格式
 
             # 检查必需参数
             if data.get("chunk_faces") is None or data.get("chunk_whisper_features") is None:
@@ -58,19 +67,19 @@ class Processor(BaseProcessor):
                 res_params.err_msg = "chunk_faces/chunk_whisper_features must be lists"
                 return
 
-            # 转换序列化数据为tensor格式
+            # 简单的数据转换
             convert_start = time.time()
             
+            # 直接创建tensor
             if isinstance(chunk_faces[0], list):
-                chunk_faces_tensor = torch.tensor(chunk_faces, dtype=torch.float32)
+                chunk_faces_tensor = torch.tensor(chunk_faces, dtype=torch.float32, device="cuda")
             else:
                 chunk_faces_tensor = chunk_faces
                 
-            # 处理whisper特征 - 这是一个列表的列表，每个元素需要单独转换
+            # 处理whisper特征
             if isinstance(chunk_whisper_features, list) and len(chunk_whisper_features) > 0:
                 if isinstance(chunk_whisper_features[0], list):
-                    # 每个元素是一个tensor的序列化数据
-                    chunk_whisper_tensor = [torch.tensor(w, dtype=torch.float32) for w in chunk_whisper_features]
+                    chunk_whisper_tensor = [torch.tensor(w, dtype=torch.float32, device="cuda") for w in chunk_whisper_features]
                 else:
                     chunk_whisper_tensor = chunk_whisper_features
             else:
@@ -78,23 +87,6 @@ class Processor(BaseProcessor):
 
             convert_time = time.time() - convert_start
             logger.info(f"Data conversion completed in {convert_time:.3f}s")
-
-            # 获取设备信息并移动tensor到正确的设备
-            device = self._video_predictor._engine.get_device()
-            logger.info(f"Moving tensors to device: {device}")
-            
-            move_start = time.time()
-            
-            # 移动faces tensor到设备
-            if isinstance(chunk_faces_tensor, torch.Tensor):
-                chunk_faces_tensor = chunk_faces_tensor.to(device)
-            
-            # 移动whisper特征到设备
-            if isinstance(chunk_whisper_tensor, list):
-                chunk_whisper_tensor = [w.to(device) if isinstance(w, torch.Tensor) else w for w in chunk_whisper_tensor]
-            
-            move_time = time.time() - move_start
-            logger.info(f"Tensor device movement completed in {move_time:.3f}s")
 
             # 转换weight_dtype字符串为torch.dtype
             if weight_dtype == "float16":
@@ -158,6 +150,49 @@ class Processor(BaseProcessor):
         }
 
         return
+
+    def _warmup_inference(self):
+        """执行预热推理，初始化模型和缓存"""
+        try:
+            # 创建小的测试数据
+            batch_size = 1
+            num_frames = 16
+            height = 256
+            width = 256
+            
+            # 创建随机测试数据 - 使用正确的维度
+            test_faces = torch.randn(num_frames, 3, height, width, dtype=torch.float32, device="cuda")
+            # whisper特征应该是3D的，形状为 [seq_len, hidden_dim]
+            test_whisper = [torch.randn(1500, 384, dtype=torch.float32, device="cuda") for _ in range(num_frames)]
+            
+            logger.info("Starting warmup inference with test data...")
+            warmup_start = time.time()
+            
+            # 执行预热推理
+            _ = self._video_predictor._engine.model_inference_by_chunk(
+                chunk_faces=test_faces,
+                chunk_whisper_features=test_whisper,
+                num_frames=num_frames,
+                num_inference_steps=5,  # 使用较少的步数进行预热
+                guidance_scale=1.0,
+                weight_dtype=torch.float16,
+                eta=0.0,
+                generator=None,
+                callback=None,
+                callback_steps=1,
+                height=height,
+                width=width,
+                debug=False,
+            )
+            
+            warmup_time = time.time() - warmup_start
+            logger.info(f"Warmup inference completed in {warmup_time:.3f}s")
+            
+            # 清理测试数据，但不清理GPU缓存以保持模型状态
+            del test_faces, test_whisper
+            
+        except Exception as e:
+            logger.warn(f"Warmup inference failed: {str(e)} - this is not critical")
 
 
 # NOTE: 从MaaS标准模型路径获取config文件

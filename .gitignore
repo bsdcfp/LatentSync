@@ -46,6 +46,8 @@ wandb/
 *.txt
 *.lprof
 models/temp_config.yaml
+*.pid
+/log
 
 !/latentsync/utils/mask*.png
 /checkpoints/

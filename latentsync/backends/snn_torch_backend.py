@@ -248,14 +248,14 @@ class SNNTorchBackend(BaseBackend):
                 self.unet.__class__.calculate_max_device_memory = calculate_max_device_memory
                 self.unet.__class__.activate_engine = activate_engine
                 self.unet.__class__.reshape = reshape
-                self.unet.__class__.verbose = False
+                self.unet.__class__.verbose = getattr(self.config, 'verbose', False)
                 self.unet.__class__.backend = 'torch'
 
                 self.vae.__class__.load_trt = load_trt_vae
                 self.vae.__class__.calculate_max_device_memory = calculate_max_device_memory
                 self.vae.__class__.activate_engine = activate_engine
                 self.vae.__class__.reshape = reshape
-                self.vae.__class__.verbose = False
+                self.vae.__class__.verbose = getattr(self.config, 'verbose', False)
                 self.vae.__class__.backend = 'torch'
 
                 self.vae.__class__.decode_latents = decode_latents
@@ -271,7 +271,7 @@ class SNNTorchBackend(BaseBackend):
                 ]
 
                 for item in trt_model_list:
-                    item.load_trt(trt_root_path, batch_size, use_cuda_graph=True, verbose=False)
+                    item.load_trt(trt_root_path, batch_size, use_cuda_graph=True, verbose=getattr(self.config, 'verbose', False))
 
                 max_device_memory = 0
                 for item in trt_model_list:
@@ -285,9 +285,9 @@ class SNNTorchBackend(BaseBackend):
 
                 logger.info("TensorRT models loaded successfully")
             else:
-                self.unet.__class__.verbose = False
+                self.unet.__class__.verbose = getattr(self.config, 'verbose', False)
                 self.unet.__class__.backend = 'torch'
-                self.vae.__class__.verbose = False
+                self.vae.__class__.verbose = getattr(self.config, 'verbose', False)
                 self.vae.__class__.backend = 'torch'
         else:
             logger.info("Skipping TensorRT setup in lightweight mode")
