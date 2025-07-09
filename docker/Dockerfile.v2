@@ -1,0 +1,3 @@
+FROM harbor.shopeemobile.com/aip/aip-image-hub/aip-prod/projects/100208/latentsync-service:oneservice-v1.1
+
+COPY *.sh /workspace/LatentSync/

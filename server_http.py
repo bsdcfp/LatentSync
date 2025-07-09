@@ -14,7 +14,8 @@ import os
 import time
 import torch
 import numpy as np
-
+import base64
+import gzip
 from aipinfer import logger, exceptions
 from typing import Optional, Dict, List, Any
 
@@ -22,6 +23,40 @@ from latentsync.backends.snn_predictor import SNNPredictor
 
 from oneservice import BaseProcessor, ResParams, MonitorTimer, ReqParams, server
 
+import threading
+_predictor_lock = threading.Lock()
+
+
+def json_to_tensor_decompressed(json_data):
+    """从JSON恢复tensor"""
+    # 解码
+    compressed = base64.b64decode(json_data['data'])
+    # 解压
+    if json_data.get('compression') == 'gzip':
+        tensor_bytes = gzip.decompress(compressed)
+    else:
+        tensor_bytes = compressed
+    # 重建tensor
+    np_dtype = np.dtype(json_data['dtype'])
+    tensor = np.frombuffer(tensor_bytes, dtype=np_dtype)
+    return tensor.reshape(json_data['shape'])
+
+def tensor_to_json_compressed(tensor, compression='gzip'):
+    """将tensor压缩后转为JSON友好格式"""
+    if isinstance(tensor, torch.Tensor):
+        tensor = tensor.cpu().numpy()
+    tensor_bytes = tensor.tobytes()
+    if compression == 'gzip':
+        compressed = gzip.compress(tensor_bytes)
+    else:
+        compressed = tensor_bytes
+    encoded = base64.b64encode(compressed).decode('utf-8')
+    return {
+        'data': encoded,
+        'shape': tensor.shape,
+        'dtype': str(tensor.dtype),
+        'compression': compression
+    }
 
 class Processor(BaseProcessor):
     def __init__(self, config_file: str):
@@ -36,120 +71,135 @@ class Processor(BaseProcessor):
         logger.info("Warmup inference completed")
 
     def __call__(self, req_params: ReqParams, res_params: ResParams):
-        # NOTE: 解析请求参数获取推理所需参数
-        with MonitorTimer("decode"):
-            # 获取实际的请求数据 - 客户端发送的是嵌套结构
-            request_data = req_params.data
-            data = request_data.get("data", request_data)  # 兼容两种格式
+        with _predictor_lock:
+            # NOTE: 解析请求参数获取推理所需参数
+            with MonitorTimer("decode"):
+                # 获取实际的请求数据 - 客户端发送的是嵌套结构
+                request_data = req_params.data
+                data = request_data.get("data", request_data)  # 兼容两种格式
 
-            # 检查必需参数
-            if data.get("chunk_faces") is None or data.get("chunk_whisper_features") is None:
-                res_params.err_num = exceptions.NUM_ILLEGAL_ARGS
-                res_params.err_msg = "chunk_faces/chunk_whisper_features cann't find in request"
-                return
+                # 检查必需参数
+                if data.get("chunk_faces") is None or data.get("chunk_whisper_features") is None:
+                    res_params.err_num = exceptions.NUM_ILLEGAL_ARGS
+                    res_params.err_msg = "chunk_faces/chunk_whisper_features cann't find in request"
+                    return
 
-            chunk_faces = data["chunk_faces"]
-            chunk_whisper_features = data["chunk_whisper_features"]
-            
-            # 获取推理参数（可选，有默认值）
-            num_frames = data.get("num_frames", 16)
-            num_inference_steps = data.get("num_inference_steps", 20)
-            guidance_scale = data.get("guidance_scale", 1.0)
-            weight_dtype = data.get("weight_dtype", "float16")
-            eta = data.get("eta", 0.0)
-            height = data.get("height", 256)
-            width = data.get("width", 256)
-            debug = data.get("debug", False)
-
-            # 验证参数
-            if not isinstance(chunk_faces, list) or not isinstance(chunk_whisper_features, list):
-                res_params.err_num = exceptions.NUM_ILLEGAL_ARGS
-                res_params.err_msg = "chunk_faces/chunk_whisper_features must be lists"
-                return
-
-            # 简单的数据转换
-            convert_start = time.time()
-            
-            # 直接创建tensor
-            if isinstance(chunk_faces[0], list):
-                chunk_faces_tensor = torch.tensor(chunk_faces, dtype=torch.float32, device="cuda")
-            else:
-                chunk_faces_tensor = chunk_faces
+                chunk_faces = data["chunk_faces"]
+                chunk_whisper_features = data["chunk_whisper_features"]
                 
-            # 处理whisper特征
-            if isinstance(chunk_whisper_features, list) and len(chunk_whisper_features) > 0:
-                if isinstance(chunk_whisper_features[0], list):
-                    chunk_whisper_tensor = [torch.tensor(w, dtype=torch.float32, device="cuda") for w in chunk_whisper_features]
+                # 自动解压 chunk_faces
+                if isinstance(chunk_faces, dict) and 'data' in chunk_faces:
+                    chunk_faces = json_to_tensor_decompressed(chunk_faces)
+                # 自动解压 chunk_whisper_features
+                if isinstance(chunk_whisper_features, list) and len(chunk_whisper_features) > 0 and isinstance(chunk_whisper_features[0], dict) and 'data' in chunk_whisper_features[0]:
+                    chunk_whisper_features = [json_to_tensor_decompressed(w) for w in chunk_whisper_features]
+
+                # 获取推理参数（可选，有默认值）
+                num_frames = data.get("num_frames", 16)
+                num_inference_steps = data.get("num_inference_steps", 20)
+                guidance_scale = data.get("guidance_scale", 1.0)
+                weight_dtype = data.get("weight_dtype", "float16")
+                eta = data.get("eta", 0.0)
+                height = data.get("height", 256)
+                width = data.get("width", 256)
+                debug = data.get("debug", False)
+
+                # 验证参数
+                # if not isinstance(chunk_faces, list) or not isinstance(chunk_whisper_features, list):
+                #     res_params.err_num = exceptions.NUM_ILLEGAL_ARGS
+                #     res_params.err_msg = "chunk_faces/chunk_whisper_features must be lists"
+                #     return
+
+                # 简单的数据转换
+                convert_start = time.time()
+                
+                # 直接创建tensor
+                if isinstance(chunk_faces, list):
+                    chunk_faces_tensor = torch.tensor(chunk_faces, dtype=torch.float32, device="cuda").contiguous()
+                else:
+                    chunk_faces_tensor = torch.from_numpy(chunk_faces).to(torch.float32).to("cuda").contiguous() if isinstance(chunk_faces, np.ndarray) else chunk_faces
+                    
+                # 处理whisper特征
+                if isinstance(chunk_whisper_features, list) and len(chunk_whisper_features) > 0:
+                    if isinstance(chunk_whisper_features[0], list):
+                        chunk_whisper_tensor = [torch.tensor(w, dtype=torch.float32, device="cuda").contiguous() for w in chunk_whisper_features]
+                    elif isinstance(chunk_whisper_features[0], np.ndarray):
+                        chunk_whisper_tensor = [torch.from_numpy(w).to(torch.float32).to("cuda").contiguous() for w in chunk_whisper_features]
+                    else:
+                        chunk_whisper_tensor = chunk_whisper_features
                 else:
                     chunk_whisper_tensor = chunk_whisper_features
-            else:
-                chunk_whisper_tensor = chunk_whisper_features
 
-            convert_time = time.time() - convert_start
-            logger.info(f"Data conversion completed in {convert_time:.3f}s")
+                convert_time = time.time() - convert_start
+                logger.info(f"Data conversion completed in {convert_time:.3f}s")
 
-            # 转换weight_dtype字符串为torch.dtype
-            if weight_dtype == "float16":
-                weight_dtype = torch.float16
-            elif weight_dtype == "float32":
-                weight_dtype = torch.float32
-            else:
-                weight_dtype = torch.float16  # 默认值
+                # 转换weight_dtype字符串为torch.dtype
+                if weight_dtype == "float16":
+                    weight_dtype = torch.float16
+                elif weight_dtype == "float32":
+                    weight_dtype = torch.float32
+                else:
+                    weight_dtype = torch.float16  # 默认值
 
-        with MonitorTimer("predictor"):
-            try:
-                # NOTE: 使用与local_test.py相同的推理方式
-                logger.info(f"Starting chunk inference...")
-                
-                # 添加推理时间监控
-                inference_start = time.time()
-                
-                # 执行推理
-                decoded_latents = self._video_predictor._engine.model_inference_by_chunk(
-                    chunk_faces=chunk_faces_tensor,
-                    chunk_whisper_features=chunk_whisper_tensor,
-                    num_frames=num_frames,
-                    num_inference_steps=num_inference_steps,
-                    guidance_scale=guidance_scale,
-                    weight_dtype=weight_dtype,
-                    eta=eta,
-                    generator=None,
-                    callback=None,
-                    callback_steps=1,
-                    height=height,
-                    width=width,
-                    debug=debug,
-                )
-                
-                inference_time = time.time() - inference_start
-                logger.info(f"Model inference completed in {inference_time:.3f}s")
-                
-                # 将结果转换为可序列化的格式
-                # 注意：decoded_latents是torch.Tensor，需要转换为numpy数组
-                serialize_start = time.time()
-                frame_np = decoded_latents.cpu().numpy()
-                serializable_frame = frame_np.tolist()  # 转换为Python列表以便JSON序列化
-                serialize_time = time.time() - serialize_start
-                logger.info(f"Result serialization completed in {serialize_time:.3f}s")
-                
-            except Exception as e:
-                logger.error(f"Video inference failed: {str(e)}")
-                res_params.err_num = exceptions.NUM_BACKEND_ERROR
-                res_params.err_msg = f"Video inference error: {str(e)}"
-                return
+            with MonitorTimer("predictor"):
+                try:
+                    # NOTE: 使用与local_test.py相同的推理方式
+                    logger.info(f"Starting chunk inference...")
+                    
+                    # 添加推理时间监控
+                    inference_start = time.time()
+                    
+                    # 执行推理
+                    decoded_latents = self._video_predictor._engine.model_inference_by_chunk(
+                        chunk_faces=chunk_faces_tensor,
+                        chunk_whisper_features=chunk_whisper_tensor,
+                        num_frames=num_frames,
+                        num_inference_steps=num_inference_steps,
+                        guidance_scale=guidance_scale,
+                        weight_dtype=weight_dtype,
+                        eta=eta,
+                        generator=None,
+                        callback=None,
+                        callback_steps=1,
+                        height=height,
+                        width=width
+                    )
+                    
+                    inference_time = time.time() - inference_start
+                    logger.info(f"Model inference completed in {inference_time:.3f}s")
+                    
+                    # 将结果转换为可序列化的格式
+                    # 注意：decoded_latents是torch.Tensor，需要转换为numpy数组
+                    serialize_start = time.time()
+                    frame_np = decoded_latents.cpu().numpy()
+                    # 原始未压缩大小
+                    uncompressed_bytes = frame_np.nbytes
+                    # 压缩
+                    serializable_frame = tensor_to_json_compressed(frame_np, compression='gzip')
+                    compressed_bytes = len(serializable_frame['data'])
+                    serialize_time = time.time() - serialize_start
+                    logger.info(f"Result serialization completed in {serialize_time:.3f}s")
+                    if debug:
+                        logger.info(f"[DEBUG] Response uncompressed size: {uncompressed_bytes/1024/1024:.2f} MB, compressed size: {compressed_bytes/1024/1024:.2f} MB")
+                    
+                except Exception as e:
+                    logger.error(f"Video inference failed: {str(e)}")
+                    res_params.err_num = exceptions.NUM_BACKEND_ERROR
+                    res_params.err_msg = f"Video inference error: {str(e)}"
+                    return
 
-        # 设置返回结果
-        res_params.result = {
-            "decoded_latents": serializable_frame,
-            "num_frames": num_frames,
-            "num_inference_steps": num_inference_steps,
-            "guidance_scale": guidance_scale,
-            "height": height,
-            "width": width,
-            "debug": debug
-        }
+            # 设置返回结果
+            res_params.result = {
+                "decoded_latents": serializable_frame,
+                "num_frames": num_frames,
+                "num_inference_steps": num_inference_steps,
+                "guidance_scale": guidance_scale,
+                "height": height,
+                "width": width,
+                "debug": debug
+            }
 
-        return
+            return
 
     def _warmup_inference(self):
         """执行预热推理，初始化模型和缓存"""

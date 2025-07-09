@@ -41,6 +41,7 @@ import requests
 import pandas as pd
 import tqdm
 from scipy.spatial import distance
+import gzip
 
 # 导入视频生成相关模块
 from latentsync.backends.snn_predictor import SNNPredictor
@@ -53,6 +54,38 @@ time_list = []
 
 # 全局predictor实例
 _global_predictor = None
+
+
+def json_to_tensor_decompressed(json_data):
+    """从JSON恢复tensor"""
+    # 解码
+    compressed = base64.b64decode(json_data['data'])
+    # 解压
+    if json_data.get('compression') == 'gzip':
+        tensor_bytes = gzip.decompress(compressed)
+    else:
+        tensor_bytes = compressed
+    # 重建tensor
+    np_dtype = np.dtype(json_data['dtype'])
+    tensor = np.frombuffer(tensor_bytes, dtype=np_dtype)
+    return tensor.reshape(json_data['shape'])
+
+def tensor_to_json_compressed(tensor, compression='gzip'):
+    """将tensor压缩后转为JSON友好格式"""
+    if isinstance(tensor, torch.Tensor):
+        tensor = tensor.cpu().numpy()
+    tensor_bytes = tensor.tobytes()
+    if compression == 'gzip':
+        compressed = gzip.compress(tensor_bytes)
+    else:
+        compressed = tensor_bytes
+    encoded = base64.b64encode(compressed).decode('utf-8')
+    return {
+        'data': encoded,
+        'shape': tensor.shape,
+        'dtype': str(tensor.dtype),
+        'compression': compression
+    }
 
 def get_predictor(config_file: str, lightweight_mode: bool = True) -> SNNPredictor:
     """
@@ -97,7 +130,7 @@ def preprocess_video_data(audio_path: str, config_file: str) -> dict:
 
 def postprocess_video_data(preprocess_data: dict, synced_video_frames: list, config_file: str) -> np.ndarray:
     """
-    视频数据后处理
+    视频数据后处理 - 按chunk分批处理以提高性能
     
     Args:
         preprocess_data: 预处理数据
@@ -116,6 +149,7 @@ def postprocess_video_data(preprocess_data: dict, synced_video_frames: list, con
     print(f"  - original_video_frames length: {len(preprocess_data['original_video_frames'])}")
     print(f"  - boxes length: {len(preprocess_data['boxes'])}")
     print(f"  - affine_matrices length: {len(preprocess_data['affine_matrices'])}")
+    print(f"  - mask_frames type: {type(preprocess_data.get('mask_frames'))}, length: {len(preprocess_data.get('mask_frames', []))}")
     print(f"  - original_faces_len: {preprocess_data['original_faces_len']}")
     
     # 将序列化的帧数据转换回torch.Tensor
@@ -124,8 +158,11 @@ def postprocess_video_data(preprocess_data: dict, synced_video_frames: list, con
         # frame_data是从JSON反序列化后的Python列表
         frame_np = np.array(frame_data, dtype=np.float32)
         frame_tensor = torch.from_numpy(frame_np)
+        # 确保tensor在GPU上
+        if torch.cuda.is_available():
+            frame_tensor = frame_tensor.cuda()
         torch_frames.append(frame_tensor)
-        print(f"  - Chunk {i+1}: frame shape {frame_tensor.shape}")
+        print(f"  - Chunk {i+1}: frame shape {frame_tensor.shape}, device: {frame_tensor.device}")
     
     # 验证帧顺序
     total_frames = sum(frame.shape[0] if len(frame.shape) > 0 else 1 for frame in torch_frames)
@@ -134,6 +171,11 @@ def postprocess_video_data(preprocess_data: dict, synced_video_frames: list, con
     
     if total_frames != preprocess_data['original_faces_len']:
         print(f"[WARNING] Frame count mismatch! Expected {preprocess_data['original_faces_len']}, got {total_frames}")
+        # 合并并裁剪
+        merged_frames = torch.cat(torch_frames, dim=0)[:preprocess_data['original_faces_len']]
+        # 重新分chunk
+        chunk_size = torch_frames[0].shape[0]
+        torch_frames = [merged_frames[i:i+chunk_size] for i in range(0, len(merged_frames), chunk_size)]
     
     # 执行后处理
     final_video_frames = predictor._postprocess_video_data(preprocess_data, torch_frames)
@@ -252,6 +294,46 @@ def make_video_generation_request(url, request_data, test_id, args):
             'http_status': 0,
             'error_message': str(e)
         }
+
+def prepare_request_payload(
+    chunk_id,
+    chunk_faces,
+    chunk_whisper_features,
+    num_frames,
+    num_inference_steps,
+    guidance_scale,
+    eta,
+    height,
+    width,
+    weight_dtype="float16",
+    debug=False
+):
+    # faces
+    chunk_faces_serializable = tensor_to_json_compressed(chunk_faces, compression='gzip')
+
+    # whisper
+    if isinstance(chunk_whisper_features, list) and len(chunk_whisper_features) > 0:
+        chunk_whisper_serializable = [tensor_to_json_compressed(w, compression='gzip') for w in chunk_whisper_features]
+    else:
+        chunk_whisper_serializable = chunk_whisper_features
+
+    chunk_request_payload = json.dumps({
+        "logid": chunk_id * 1000,
+        "clientip": "",
+        "data": {
+            "chunk_faces": chunk_faces_serializable,
+            "chunk_whisper_features": chunk_whisper_serializable,
+            "num_frames": num_frames,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+            "weight_dtype": weight_dtype,
+            "eta": eta,
+            "height": height,
+            "width": width,
+            "debug": debug
+        }
+    })
+    return chunk_request_payload
 
 def main():
     parser = argparse.ArgumentParser(description='HTTP Client for Video Generation Testing')
@@ -379,54 +461,34 @@ def main():
             
             for chunk_idx in range(num_chunks):
                 print(f"[TEST {test_id}]   - Processing chunk {chunk_idx+1}/{num_chunks}...")
-                
-                # 获取当前chunk的数据
+
                 chunk_faces = preprocess_data['faces_by_chunk'][chunk_idx]
                 chunk_whisper = preprocess_data['whisper_chunks_by_chunk'][chunk_idx]
-                
-                # 转换为可序列化格式 - 只序列化当前chunk
-                print(f"[TEST {test_id}]     - Serializing chunk {chunk_idx+1} data...")
-                serialize_start = time.time()
-                
-                if isinstance(chunk_faces, torch.Tensor):
-                    print(f"[TEST {test_id}]       - Converting faces tensor: {chunk_faces.shape}")
-                    chunk_faces_serializable = chunk_faces.cpu().numpy().tolist()
-                else:
-                    chunk_faces_serializable = chunk_faces
-                    
-                if isinstance(chunk_whisper, list) and len(chunk_whisper) > 0:
-                    print(f"[TEST {test_id}]       - Converting whisper features: {len(chunk_whisper)} items")
-                    if isinstance(chunk_whisper[0], torch.Tensor):
-                        chunk_whisper_serializable = [w.cpu().numpy().tolist() for w in chunk_whisper]
-                    else:
-                        chunk_whisper_serializable = chunk_whisper
-                else:
-                    chunk_whisper_serializable = chunk_whisper
-                
-                serialize_time = time.time() - serialize_start
-                print(f"[TEST {test_id}]     - Chunk {chunk_idx+1} serialization completed in {serialize_time:.2f}s")
-                
-                # 构建单个chunk的请求
-                chunk_request_payload = json.dumps({
-                    "logid": 1234567 + i + chunk_idx * 1000,
-                    "clientip": "",
-                    "data": {
-                        "chunk_faces": chunk_faces_serializable,
-                        "chunk_whisper_features": chunk_whisper_serializable,
-                        "num_frames": 16,
-                        "num_inference_steps": args.inference_steps,
-                        "guidance_scale": args.guidance_scale,
-                        "weight_dtype": "float16",
-                        "eta": 0.0,
-                        "height": 256,
-                        "width": 256,
-                        "debug": args.debug_pipeline
-                    }
-                })
-            
+
+                # 直接用 prepare_request_payload 生成请求体
+                chunk_request_payload = prepare_request_payload(
+                    chunk_id=1234567 + i + chunk_idx,
+                    chunk_faces=chunk_faces,
+                    chunk_whisper_features=chunk_whisper,
+                    num_frames=16,
+                    num_inference_steps=args.inference_steps,
+                    guidance_scale=args.guidance_scale,
+                    eta=0.0,
+                    height=256,
+                    width=256,
+                    weight_dtype="float16",
+                    debug=args.debug_pipeline
+                )
+
+                # 如果debug，打印请求体大小
+                if args.debug_pipeline:
+                    print(f"[DEBUG] Chunk {chunk_idx+1} request size: {len(chunk_request_payload.encode('utf-8'))/1024/1024:.2f} MB")
+
                 # 发送单个chunk的HTTP请求
-                chunk_result = make_video_generation_request(url, chunk_request_payload, f"{test_id}_chunk{chunk_idx+1}", args)
-                chunk_results.append(chunk_result)  # 收集结果
+                chunk_result = make_video_generation_request(
+                    url, chunk_request_payload, f"{test_id}_chunk{chunk_idx+1}", args
+                )
+                chunk_results.append(chunk_result)
                 
                 if chunk_result['status'] == 'SUCCESS':
                     # 从响应中获取推理结果
@@ -437,9 +499,17 @@ def main():
                     decoded_latents = response_data.get('decoded_latents')
                     if decoded_latents is None:
                         raise Exception(f"Chunk {chunk_idx+1} returned None decoded_latents")
-                    
-                    # 转换回tensor格式
-                    if isinstance(decoded_latents, list):
+
+                    # 如果debug，打印响应体大小
+                    if args.debug_pipeline:
+                        import json as _json
+                        resp_bytes = len(_json.dumps(response_data).encode('utf-8'))
+                        print(f"[DEBUG] Chunk {chunk_idx+1} response size: {resp_bytes/1024/1024:.2f} MB")
+
+                    # 自动解压缩服务端返回的压缩格式
+                    if isinstance(decoded_latents, dict) and 'data' in decoded_latents:
+                        frame_tensor = torch.from_numpy(json_to_tensor_decompressed(decoded_latents)).to(torch.float32)
+                    elif isinstance(decoded_latents, list):
                         frame_tensor = torch.tensor(decoded_latents, dtype=torch.float32)
                     else:
                         frame_tensor = decoded_latents
