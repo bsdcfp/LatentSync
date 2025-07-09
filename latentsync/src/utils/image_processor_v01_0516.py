@@ -21,7 +21,7 @@ import numpy as np
 from typing import Union
 from .affine_transform_v01_0516 import AlignRestore, laplacianSmooth
 import face_alignment
-from simpleprofiler.profiler import NVTXContext
+from latentsync import NVTXContext
 
 """
 If you are enlarging the image, you should prefer to use INTER_LINEAR or INTER_CUBIC interpolation. If you are shrinking the image, you should prefer to use INTER_AREA interpolation.

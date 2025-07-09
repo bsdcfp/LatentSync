@@ -6,7 +6,7 @@ from torch import nn
 from .attention import Transformer3DModel
 from .resnet import Downsample3D, ResnetBlock3D, Upsample3D
 from .motion_module import get_motion_module
-from simpleprofiler.profiler import NVTXContext
+from latentsync import NVTXContext
 
 @NVTXContext
 def get_down_block(

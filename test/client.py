@@ -46,7 +46,7 @@ from scipy.spatial import distance
 from latentsync.backends.snn_predictor import SNNPredictor
 
 local_url = "http://127.0.0.1:80/api/process"
-remote_url = ""
+remote_url = "http://sg12.aip.mlp.shopee.io/services/555883/api/process"
 
 # 全局时间统计列表
 time_list = []
@@ -204,7 +204,7 @@ def make_video_generation_request(url, request_data, test_id, args):
     """发送单个视频生成HTTP请求并处理响应"""
     try:
         op_begin = time.time()
-        result = requests.post(url=url, data=request_data, timeout=300)  # 添加超时设置
+        result = requests.post(url=url, data=request_data, timeout=10)  # 添加超时设置
         op_end = time.time()
         
         request_time = (op_end - op_begin) * 1000.0

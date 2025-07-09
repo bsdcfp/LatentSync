@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from typing import Union, Tuple
 
 from einops import rearrange
-from simpleprofiler.profiler import NVTXContext
+from latentsync import NVTXContext
 
 class InflatedConv3d(nn.Conv2d):
     @NVTXContext

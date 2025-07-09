@@ -20,7 +20,7 @@ import argparse
 import json
 import random
 import time
-from simpleprofiler.profiler import NVTXContext
+from latentsync import NVTXContext
 
 
 class VideoSelectedInfo:

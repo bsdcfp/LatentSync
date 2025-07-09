@@ -6,11 +6,13 @@ import numpy as np
 from diffusers.utils import BaseOutput
 from latentsync.src.models.unet import UNet3DConditionOutput
 
-from simpleprofiler.profiler import NVTXContext
+from latentsync import NVTXContext
 from latentsync.trt_backend import TrtExecutor
 from cuda import cudart
 
 from einops import rearrange
+import os
+from typing import Optional
 
 # 在文件开头添加这些函数定义
 def diycache_forward(
@@ -461,3 +463,31 @@ def decode_latents(self, latents):
         print("[INFO] vae decode", real_backend, "execution time {:.2f}".format(start.elapsed_time(end)), "ms")
     ############################### BACKEND #################################
     return decoded_latents
+
+def resolve_path(path: Optional[str], model_base: str, code_base: str) -> Optional[str]:
+    """
+    统一路径解析函数
+    
+    Args:
+        path: 要解析的路径
+        model_base: 模型库基础路径
+        code_base: 代码基础路径
+        
+    Returns:
+        解析后的绝对路径
+    """
+    if not path:
+        return path
+    if os.path.isabs(path):
+        return path
+    # 以weights/开头的，拼到模型库
+    if path.startswith("weights/"):
+        return os.path.join(model_base, path)
+    # 以latentsync/开头的，拼到代码根目录
+    if path.startswith("latentsync/"):
+        return os.path.join(code_base, path)
+    # 以stabilityai/开头的（VAE模型），直接用
+    if path.startswith("stabilityai/"):
+        return os.path.join(model_base, path)
+    # 其他路径（如0612_online_templete_female_32fps_resize_720_1560/），拼到模型库
+    return os.path.join(model_base, path)

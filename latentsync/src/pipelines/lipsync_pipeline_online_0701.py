@@ -44,7 +44,7 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 import tempfile
 # import sys
 # import types
-from simpleprofiler.profiler import NVTXContext
+from latentsync import NVTXContext
 from line_profiler import profile
 
 

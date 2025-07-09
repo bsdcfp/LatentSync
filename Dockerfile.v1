@@ -1,0 +1,8 @@
+FROM harbor.shopeemobile.com/aip/aip-image-hub/aip-prod/projects/100208/latentsync-service:oneservice-v1.0
+
+COPY latentsync /workspace/LatentSync/latentsync
+COPY *.py /workspace/LatentSync/
+COPY *.sh /workspace/LatentSync/
+
+RUN pip install --no-cache-dir \
+        -i https://pypi.tuna.tsinghua.edu.cn/simple opencv-python-headless==4.11.0.86

@@ -52,11 +52,10 @@ class SNNTorchBackend(BaseBackend):
         if not config_file:
             raise ValueError("config_file is required for video generation")
 
-        # 如果config_file是相对路径，拼到models目录
+        # 如果config_file是相对路径，拼到model_path目录
         if not os.path.isabs(config_file):
-            # 获取models目录路径
-            models_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "models")
-            config_path = os.path.join(models_dir, config_file)
+            # 使用config中的model_path作为基础路径
+            config_path = os.path.join(model_path, config_file)
         else:
             config_path = config_file
 
@@ -117,33 +116,18 @@ class SNNTorchBackend(BaseBackend):
         # 统一路径处理：区分模型库路径和代码路径
         code_base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         model_base = self.config.model_path
-        def resolve_path(path):
-            if not path:
-                return path
-            if os.path.isabs(path):
-                return path
-            # 以weights/开头的，拼到模型库
-            if path.startswith("weights/"):
-                return os.path.join(model_base, path)
-            # 以latentsync/开头的，拼到代码根目录
-            if path.startswith("latentsync/"):
-                return os.path.join(code_base, path)
-            # 以stabilityai/开头的（VAE模型），直接用
-            if path.startswith("stabilityai/"):
-                return path
-            # 其他路径（如0612_online_templete_female_32fps_resize_720_1560/），拼到模型库
-            return os.path.join(model_base, path)
+        from .utils import resolve_path
         logger.info(f"Using code base for latentsync paths: {code_base}")
         logger.info(f"Using model base for weights/data paths: {model_base}")
 
         # 加载UNet配置 - 处理相对路径
-        unet_config_path = resolve_path(config.get("unet_config_path", "latentsync/configs/unet/second_stage.yaml"))
+        unet_config_path = resolve_path(config.get("unet_config_path", "latentsync/configs/unet/second_stage.yaml"), model_base, code_base)
         logger.info(f"Loading UNet config from: {unet_config_path}")
         unet_config = OmegaConf.load(unet_config_path)
 
         # 初始化调度器 - 处理相对路径（仅在完整模式下）
         if not lightweight_mode:
-            scheduler_config_path = resolve_path(config.get("scheduler_config_path", "latentsync/configs"))
+            scheduler_config_path = resolve_path(config.get("scheduler_config_path", "latentsync/configs"), model_base, code_base)
             logger.info(f"Loading scheduler config from: {scheduler_config_path}")
             scheduler = DDIMScheduler.from_pretrained(scheduler_config_path)
         else:
@@ -151,7 +135,7 @@ class SNNTorchBackend(BaseBackend):
             logger.info("Skipping scheduler loading in lightweight mode")
 
         # 初始化音频编码器
-        whisper_model_path = resolve_path(config.get("whisper_model_path", "weights/whisper/tiny.pt"))
+        whisper_model_path = resolve_path(config.get("whisper_model_path", "weights/whisper/tiny.pt"), model_base, code_base)
         logger.info(f"Loading Whisper model from: {whisper_model_path}")
         audio_encoder = Audio2Feature(
             model_path=whisper_model_path,
@@ -161,7 +145,7 @@ class SNNTorchBackend(BaseBackend):
 
         # 初始化VAE（仅在完整模式下）
         if not lightweight_mode:
-            vae_model_path = resolve_path(config.get("vae_model_path", "stabilityai/sd-vae-ft-mse"))
+            vae_model_path = resolve_path(config.get("vae_model_path", "stabilityai/sd-vae-ft-mse"), model_base, code_base)
             logger.info(f"Loading VAE model from: {vae_model_path}")
             vae = AutoencoderKL.from_pretrained(
                 vae_model_path,
@@ -191,7 +175,7 @@ class SNNTorchBackend(BaseBackend):
             logger.info(f"Model config keys: {list(model_config.keys())}")
 
             # 处理UNet检查点路径
-            inference_ckpt_path = resolve_path(config.get("inference_ckpt_path", "weights/latentsync/latentsync_unet.pt"))
+            inference_ckpt_path = resolve_path(config.get("inference_ckpt_path", "weights/latentsync/latentsync_unet.pt"), model_base, code_base)
             logger.info(f"Loading UNet checkpoint from: {inference_ckpt_path}")
 
             unet, _ = UNet3DConditionModel.from_pretrained(
@@ -205,10 +189,10 @@ class SNNTorchBackend(BaseBackend):
             logger.info("Skipping UNet loading in lightweight mode")
 
         # 初始化VideoIndexGenerator - 处理相对路径
-        connected_json_path = resolve_path(config.get("connected_info_json"))
-        video_info_json_path = resolve_path(config.get("video_info_json"))
-        shot_video_json_path = resolve_path(config.get("shot_video_json_path"))
-        video_template_dir = resolve_path(config.get("video_template_dir"))
+        connected_json_path = resolve_path(config.get("connected_info_json"), model_base, code_base)
+        video_info_json_path = resolve_path(config.get("video_info_json"), model_base, code_base)
+        shot_video_json_path = resolve_path(config.get("shot_video_json_path"), model_base, code_base)
+        video_template_dir = resolve_path(config.get("video_template_dir"), model_base, code_base)
 
         logger.info(f"VideoIndexGenerator paths:")
         logger.info(f"  - connected_json_path: {connected_json_path}")

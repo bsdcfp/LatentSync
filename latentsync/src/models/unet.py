@@ -28,7 +28,7 @@ from .resnet import InflatedConv3d, InflatedGroupNorm
 from ..utils.util import zero_rank_log
 from einops import rearrange
 from .utils import zero_module
-from simpleprofiler.profiler import NVTXContext
+from latentsync import NVTXContext
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 

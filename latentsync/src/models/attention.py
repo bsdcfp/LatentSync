@@ -18,7 +18,7 @@ from diffusers.models.attention import FeedForward, AdaLayerNorm
 from einops import rearrange, repeat
 from .utils import zero_module
 from .flash_attention import flash_attention
-from simpleprofiler.profiler import NVTXContext
+from latentsync import NVTXContext
 
 @dataclass
 class Transformer3DModelOutput(BaseOutput):

@@ -48,10 +48,12 @@ class SNNPredictor(object):
                         config["snn_torch_predictor"], "snn_torch_predictor"
                     )
 
-                    config.model_path = os.path.join(dir_path, config.model_path)
+                    # 如果model_path是相对路径，则与dir_path拼接；如果是绝对路径，则直接使用
+                    if not os.path.isabs(config.model_path):
+                        config.model_path = os.path.join(dir_path, config.model_path)
 
                     # 检查是否有视频生成配置
-                    video_config_path = os.path.join(dir_path, "..", "models", "V1.0_latentsync_video_predictor.json")
+                    video_config_path = os.path.join(config.model_path, "V1.0_latentsync_video_predictor.json")
                     video_config_path = os.path.abspath(video_config_path)
                     self._has_video_config = os.path.exists(video_config_path)
                     logger.info(f"Video config path: {video_config_path}")
@@ -86,7 +88,9 @@ class SNNPredictor(object):
                     logger.info("Run on snn_fast_predictor")
                     self._predictor_type = "snn_fast_predictor"
                     config = load_config(config["snn_fast_predictor"], "snn_fast_predictor")
-                    config.model_path = os.path.join(dir_path, config.model_path)
+                    # 如果model_path是相对路径，则与dir_path拼接；如果是绝对路径，则直接使用
+                    if not os.path.isabs(config.model_path):
+                        config.model_path = os.path.join(dir_path, config.model_path)
                     self._engine = SNNFastBackend(config)
                     
                     # AI TryOn 不需要前后处理器（已废弃）
@@ -132,26 +136,11 @@ class SNNPredictor(object):
         # 统一路径处理：区分模型库路径和代码路径
         code_base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         model_base = self._engine.config.model_path
-        def resolve_path(path):
-            if not path:
-                return path
-            if os.path.isabs(path):
-                return path
-            # 以weights/开头的，拼到模型库
-            if path.startswith("weights/"):
-                return os.path.join(model_base, path)
-            # 以latentsync/开头的，拼到代码根目录
-            if path.startswith("latentsync/"):
-                return os.path.join(code_base, path)
-            # 以stabilityai/开头的（VAE模型），直接用
-            if path.startswith("stabilityai/"):
-                return path
-            # 其他路径（如0612_online_templete_female_32fps_resize_720_1560/），拼到模型库
-            return os.path.join(model_base, path)
+        from .utils import resolve_path
         
         # 解析路径
-        video_cache_dir = resolve_path(video_config.get("video_cache_dir"))
-        mask_base_dir = resolve_path(video_config.get("mask_base_dir")) if video_config.get("mask_base_dir") else None
+        video_cache_dir = resolve_path(video_config.get("video_cache_dir"), model_base, code_base)
+        mask_base_dir = resolve_path(video_config.get("mask_base_dir"), model_base, code_base) if video_config.get("mask_base_dir") else None
         
         debug = video_config.get("debug_pipeline", False)
         if debug:

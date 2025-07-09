@@ -10,6 +10,20 @@ echo "Running service using config version $config_file...\n"
 if [[ -z "${POD_NAME}" ]]; then
   echo "Environment variable POD_NAME not set"
 else
+  # 确保目标日志目录存在
+  if [[ ! -d "/root/log/$POD_NAME" ]]; then
+    echo "Creating log directory: /root/log/$POD_NAME"
+    mkdir -p /root/log/$POD_NAME
+  else
+    echo "Log directory already exists: /root/log/$POD_NAME"
+  fi
+  
+  # 如果log目录已存在，先删除它
+  if [[ -L "log" ]]; then
+    rm log
+  elif [[ -d "log" ]]; then
+    rm -rf log
+  fi
   ln -s /root/log/$POD_NAME log
 fi
 
