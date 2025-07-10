@@ -26,7 +26,7 @@ parent_dir = os.path.join(current_dir, "..")
 sys.path.append(parent_dir)
 
 import base64
-import json
+import orjson
 import argparse
 import glob
 import random
@@ -42,6 +42,7 @@ import pandas as pd
 import tqdm
 from scipy.spatial import distance
 import gzip
+from typing import Union, List
 
 # 导入视频生成相关模块
 from latentsync.backends.snn_predictor import SNNPredictor
@@ -56,36 +57,36 @@ time_list = []
 _global_predictor = None
 
 
-def json_to_tensor_decompressed(json_data):
-    """从JSON恢复tensor"""
-    # 解码
-    compressed = base64.b64decode(json_data['data'])
-    # 解压
-    if json_data.get('compression') == 'gzip':
-        tensor_bytes = gzip.decompress(compressed)
-    else:
-        tensor_bytes = compressed
-    # 重建tensor
-    np_dtype = np.dtype(json_data['dtype'])
-    tensor = np.frombuffer(tensor_bytes, dtype=np_dtype)
-    return tensor.reshape(json_data['shape'])
+# def json_to_tensor_decompressed(json_data):
+#     """从JSON恢复tensor"""
+#     # 解码
+#     compressed = base64.b64decode(json_data['data'])
+#     # 解压
+#     if json_data.get('compression') == 'gzip':
+#         tensor_bytes = gzip.decompress(compressed)
+#     else:
+#         tensor_bytes = compressed
+#     # 重建tensor
+#     np_dtype = np.dtype(json_data['dtype'])
+#     tensor = np.frombuffer(tensor_bytes, dtype=np_dtype)
+#     return tensor.reshape(json_data['shape'])
 
-def tensor_to_json_compressed(tensor, compression='gzip'):
-    """将tensor压缩后转为JSON友好格式"""
-    if isinstance(tensor, torch.Tensor):
-        tensor = tensor.cpu().numpy()
-    tensor_bytes = tensor.tobytes()
-    if compression == 'gzip':
-        compressed = gzip.compress(tensor_bytes)
-    else:
-        compressed = tensor_bytes
-    encoded = base64.b64encode(compressed).decode('utf-8')
-    return {
-        'data': encoded,
-        'shape': tensor.shape,
-        'dtype': str(tensor.dtype),
-        'compression': compression
-    }
+# def tensor_to_json_compressed(tensor, compression='gzip'):
+#     """将tensor压缩后转为JSON友好格式"""
+#     if isinstance(tensor, torch.Tensor):
+#         tensor = tensor.cpu().numpy()
+#     tensor_bytes = tensor.tobytes()
+#     if compression == 'gzip':
+#         compressed = gzip.compress(tensor_bytes)
+#     else:
+#         compressed = tensor_bytes
+#     encoded = base64.b64encode(compressed).decode('utf-8')
+#     return {
+#         'data': encoded,
+#         'shape': tensor.shape,
+#         'dtype': str(tensor.dtype),
+#         'compression': compression
+#     }
 
 def get_predictor(config_file: str, lightweight_mode: bool = True) -> SNNPredictor:
     """
@@ -243,86 +244,133 @@ def save_results_to_csv(results_data, output_dir, args):
     print(f"[INFO] Results saved to: {output_path}")
 
 def make_video_generation_request(url, request_data, test_id, args):
-    """发送单个视频生成HTTP请求并处理响应"""
+    """发送单个视频生成HTTP请求并使用 orjson 处理响应"""
     try:
         op_begin = time.time()
-        result = requests.post(url=url, data=request_data, timeout=10)  # 添加超时设置
+        # request_data 应该是 prepare_request_payload_with_orjson 返回的 bytes
+        headers = {'Content-Type': 'application/json'}
+        result = requests.post(url=url, data=request_data, headers=headers, timeout=10)
         op_end = time.time()
         
         request_time = (op_end - op_begin) * 1000.0
-        time_list.append(request_time)
+        result.raise_for_status()
         
-        if result.status_code == 200:
-            response_json = result.json()
-            if "result" in response_json and response_json["result"] is not None:
-                results = response_json["result"]
+        # 检查 HTTP 状态码，如果不是 200，先处理错误
+        # if result.status_code != 200:
+        #     print(f"[TEST {test_id}] FAILED - HTTP {result.status_code}: {result.text}")
+        #     return {
+        #         'test_id': test_id, 'status': 'FAILED', 'request_time_ms': request_time,
+        #         'http_status': result.status_code, 'error_message': result.text
+        #     }
+
+        # --- 核心修改在这里 ---
+        # 使用 orjson.loads() 来解析响应的二进制内容
+        response_dict = orjson.loads(result.content)
+        if "err_num" in response_dict and response_dict["err_num"] != 0:
+            error_msg = f"Server returned an error: {response_dict.get('err_msg', 'Unknown error')}"
+            print(f"[TEST {test_id}] FAILED - {error_msg}")
+            return {
+                'test_id': test_id, 'status': 'FAILED', 'request_time_ms': request_time,
+                'http_status': result.status_code, 'error_message': error_msg
+            }
+        
+        if "result" in response_dict and response_dict["result"] is not None:
+            # server_results = response_dict["result"]
+            server_results_payload = response_dict["result"]
+            server_results = orjson.loads(server_results_payload)
+            print(f"keys: {server_results.keys()}")
+            
+            # 3. 在这个嵌套的字典中寻找 decoded_latents
+            if "decoded_latents" in server_results:
+                decoded_latents_list = server_results["decoded_latents"]
+                if not isinstance(decoded_latents_list, list):
+                    raise TypeError(f"Expected decoded_latents to be a list, but got {type(decoded_latents_list).__name__}")
+                decoded_latents_np = np.array(decoded_latents_list)
+                server_results["decoded_latents"] = decoded_latents_np
+
                 print(f"[TEST {test_id}] SUCCESS - Request time: {request_time:.2f} ms")
                 
-                # 返回成功结果
+                # 4. 返回成功，并将嵌套的 server_results 作为 response_data
                 return {
-                    'test_id': test_id,
-                    'status': 'SUCCESS',
-                    'request_time_ms': request_time,
-                    'http_status': result.status_code,
-                    'response_data': results
+                    'test_id': test_id, 'status': 'SUCCESS', 'request_time_ms': request_time,
+                    'http_status': result.status_code, 
+                    'response_data': server_results # <--- 返回 result 内部的字典
                 }
-            else:
-                print(f"[TEST {test_id}] FAILED - No result in response: {response_json}")
-                return {
-                    'test_id': test_id,
-                    'status': 'FAILED',
-                    'request_time_ms': request_time,
-                    'http_status': result.status_code,
-                    'error_message': f"No result in response: {response_json}"
-                }
-        else:
-            print(f"[TEST {test_id}] FAILED - HTTP {result.status_code}: {result.text}")
-            return {
-                'test_id': test_id,
-                'status': 'FAILED',
-                'request_time_ms': request_time,
-                'http_status': result.status_code,
-                'error_message': result.text
-            }
-            
+        
+        # 如果代码走到这里，说明响应结构不符合预期
+        error_msg = f"Invalid response structure. 'result' or 'decoded_latents' key missing or invalid. Response keys: {response_dict.keys()}"
+        print(f"[TEST {test_id}] FAILED - {error_msg}")
+        return {
+            'test_id': test_id, 'status': 'FAILED', 'request_time_ms': request_time,
+            'http_status': result.status_code, 'error_message': error_msg
+        }
+
+    except requests.exceptions.HTTPError as e: # 更具体地捕获 HTTP 错误
+        print(f"[TEST {test_id}] FAILED - HTTP Error {e.response.status_code}: {e.response.text}")
+        return {
+            'test_id': test_id, 'status': 'FAILED', 'request_time_ms': request_time,
+            'http_status': e.response.status_code, 'error_message': e.response.text
+        }
+    except orjson.JSONDecodeError as e:
+        print(f"[TEST {test_id}] FAILED - JSON Decode Error: {str(e)}")
+        # 在 `result` 变量可能未定义时安全地访问它
+        # response_content = result.content[:50] if 'result' in locals() else b''
+        print(f"Raw response content that failed to parse: ...")
+        return {
+            'test_id': test_id, 'status': 'FAILED', 'request_time_ms': request_time,
+            'http_status': result.status_code if 'result' in locals() else 0, 'error_message': f"JSON Decode Error: {e}"
+        }
     except Exception as e:
         print(f"[TEST {test_id}] FAILED - Exception: {str(e)}")
         return {
-            'test_id': test_id,
-            'status': 'FAILED',
-            'request_time_ms': 0,
-            'http_status': 0,
-            'error_message': str(e)
+            'test_id': test_id, 'status': 'FAILED', 'request_time_ms': (time.time() - op_begin) * 1000.0,
+            'http_status': 0, 'error_message': str(e)
         }
 
+
 def prepare_request_payload(
-    chunk_id,
-    chunk_faces,
-    chunk_whisper_features,
-    num_frames,
-    num_inference_steps,
-    guidance_scale,
-    eta,
-    height,
-    width,
-    weight_dtype="float16",
-    debug=False
-):
-    # faces
-    chunk_faces_serializable = tensor_to_json_compressed(chunk_faces, compression='gzip')
+    chunk_id: int,
+    chunk_faces: torch.Tensor,
+    chunk_whisper_features: Union[torch.Tensor, List[torch.Tensor]],
+    num_frames: int,
+    num_inference_steps: int,
+    guidance_scale: float,
+    eta: float,
+    height: int,
+    width: int,
+    weight_dtype: str = "float16",
+    debug: bool = False
+) -> bytes:
+    """
+    使用 orjson 高效地准备请求体 (payload)。
+    
+    这个函数直接将包含 PyTorch Tensors 的数据结构转换为
+    一个可供 `requests.post` 使用的 bytes 对象。
 
-    # whisper
-    if isinstance(chunk_whisper_features, list) and len(chunk_whisper_features) > 0:
-        chunk_whisper_serializable = [tensor_to_json_compressed(w, compression='gzip') for w in chunk_whisper_features]
+    返回:
+        bytes: 序列化后的请求体，可直接用于 requests.post(data=...)
+    """
+    
+    # 1. 准备数据：将所有 Tensor 转换为 orjson 能直接处理的 Numpy 数组。
+    #    这是一个非常快速的操作，比压缩和base64编码快得多。
+    faces_np = chunk_faces.cpu().numpy()
+
+    if isinstance(chunk_whisper_features, list):
+        whisper_np = [w.cpu().numpy() for w in chunk_whisper_features]
     else:
-        chunk_whisper_serializable = chunk_whisper_features
+        # 保证即使是单个 tensor 也能被正确处理
+        whisper_np = chunk_whisper_features.cpu().numpy()
 
-    chunk_request_payload = json.dumps({
+    # 2. 构建包含 Numpy 数组的 Python 字典
+    payload_dict = {
         "logid": chunk_id * 1000,
         "clientip": "",
         "data": {
-            "chunk_faces": chunk_faces_serializable,
-            "chunk_whisper_features": chunk_whisper_serializable,
+            # 直接把 Numpy 数组放进去
+            "chunk_faces": faces_np,
+            "chunk_whisper_features": whisper_np,
+            
+            # 其他元数据
             "num_frames": num_frames,
             "num_inference_steps": num_inference_steps,
             "guidance_scale": guidance_scale,
@@ -332,8 +380,52 @@ def prepare_request_payload(
             "width": width,
             "debug": debug
         }
-    })
-    return chunk_request_payload
+    }
+    
+    # 3. 使用 orjson 一步完成序列化，得到最终的 bytes 对象
+    payload_bytes = orjson.dumps(payload_dict, option=orjson.OPT_SERIALIZE_NUMPY)
+    
+    return payload_bytes
+
+# def prepare_request_payload(
+#     chunk_id,
+#     chunk_faces,
+#     chunk_whisper_features,
+#     num_frames,
+#     num_inference_steps,
+#     guidance_scale,
+#     eta,
+#     height,
+#     width,
+#     weight_dtype="float16",
+#     debug=False
+# ):
+#     # faces
+#     chunk_faces_serializable = tensor_to_json_compressed(chunk_faces, compression='gzip')
+
+#     # whisper
+#     if isinstance(chunk_whisper_features, list) and len(chunk_whisper_features) > 0:
+#         chunk_whisper_serializable = [tensor_to_json_compressed(w, compression='gzip') for w in chunk_whisper_features]
+#     else:
+#         chunk_whisper_serializable = chunk_whisper_features
+
+#     chunk_request_payload = orjson.dumps({
+#         "logid": chunk_id * 1000,
+#         "clientip": "",
+#         "data": {
+#             "chunk_faces": chunk_faces_serializable,
+#             "chunk_whisper_features": chunk_whisper_serializable,
+#             "num_frames": num_frames,
+#             "num_inference_steps": num_inference_steps,
+#             "guidance_scale": guidance_scale,
+#             "weight_dtype": weight_dtype,
+#             "eta": eta,
+#             "height": height,
+#             "width": width,
+#             "debug": debug
+#         }
+#     })
+#     return chunk_request_payload
 
 def main():
     parser = argparse.ArgumentParser(description='HTTP Client for Video Generation Testing')
@@ -482,7 +574,7 @@ def main():
 
                 # 如果debug，打印请求体大小
                 if args.debug_pipeline:
-                    print(f"[DEBUG] Chunk {chunk_idx+1} request size: {len(chunk_request_payload.encode('utf-8'))/1024/1024:.2f} MB")
+                    print(f"[DEBUG] Chunk {chunk_idx+1} request size: {len(chunk_request_payload)/1024/1024:.2f} MB")
 
                 # 发送单个chunk的HTTP请求
                 chunk_result = make_video_generation_request(
@@ -495,25 +587,22 @@ def main():
                     response_data = chunk_result['response_data']
                     if response_data is None:
                         raise Exception(f"Chunk {chunk_idx+1} returned None response_data")
-                    
+                    print(f"type of response_data: {type(response_data)}")
                     decoded_latents = response_data.get('decoded_latents')
                     if decoded_latents is None:
                         raise Exception(f"Chunk {chunk_idx+1} returned None decoded_latents")
 
                     # 如果debug，打印响应体大小
                     if args.debug_pipeline:
-                        import json as _json
-                        resp_bytes = len(_json.dumps(response_data).encode('utf-8'))
-                        print(f"[DEBUG] Chunk {chunk_idx+1} response size: {resp_bytes/1024/1024:.2f} MB")
+                        resp_bytes_len = len(orjson.dumps(response_data, option=orjson.OPT_SERIALIZE_NUMPY))
+                        print(f"[DEBUG] Chunk {chunk_idx+1} response payload size: {resp_bytes_len/1024/1024:.2f} MB")
 
-                    # 自动解压缩服务端返回的压缩格式
-                    if isinstance(decoded_latents, dict) and 'data' in decoded_latents:
-                        frame_tensor = torch.from_numpy(json_to_tensor_decompressed(decoded_latents)).to(torch.float32)
-                    elif isinstance(decoded_latents, list):
-                        frame_tensor = torch.tensor(decoded_latents, dtype=torch.float32)
-                    else:
-                        frame_tensor = decoded_latents
+                    if not isinstance(decoded_latents, np.ndarray):
+                        # 添加一个健壮性检查，如果返回的不是预期的 numpy 数组，则报错
+                        raise TypeError(f"Expected decoded_latents to be a numpy array, but got {type(decoded_latents)}")
                     
+                    frame_tensor = torch.from_numpy(decoded_latents)
+
                     # 确保按正确顺序存储结果
                     synced_video_frames[chunk_idx] = frame_tensor
                     print(f"[TEST {test_id}]   - Chunk {chunk_idx+1} completed successfully and stored at position {chunk_idx}")

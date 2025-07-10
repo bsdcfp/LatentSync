@@ -16,6 +16,7 @@ import torch
 import numpy as np
 import base64
 import gzip
+import orjson
 from aipinfer import logger, exceptions
 from typing import Optional, Dict, List, Any
 
@@ -27,36 +28,36 @@ import threading
 _predictor_lock = threading.Lock()
 
 
-def json_to_tensor_decompressed(json_data):
-    """从JSON恢复tensor"""
-    # 解码
-    compressed = base64.b64decode(json_data['data'])
-    # 解压
-    if json_data.get('compression') == 'gzip':
-        tensor_bytes = gzip.decompress(compressed)
-    else:
-        tensor_bytes = compressed
-    # 重建tensor
-    np_dtype = np.dtype(json_data['dtype'])
-    tensor = np.frombuffer(tensor_bytes, dtype=np_dtype)
-    return tensor.reshape(json_data['shape'])
+# def json_to_tensor_decompressed(json_data):
+#     """从JSON恢复tensor"""
+#     # 解码
+#     compressed = base64.b64decode(json_data['data'])
+#     # 解压
+#     if json_data.get('compression') == 'gzip':
+#         tensor_bytes = gzip.decompress(compressed)
+#     else:
+#         tensor_bytes = compressed
+#     # 重建tensor
+#     np_dtype = np.dtype(json_data['dtype'])
+#     tensor = np.frombuffer(tensor_bytes, dtype=np_dtype)
+#     return tensor.reshape(json_data['shape'])
 
-def tensor_to_json_compressed(tensor, compression='gzip'):
-    """将tensor压缩后转为JSON友好格式"""
-    if isinstance(tensor, torch.Tensor):
-        tensor = tensor.cpu().numpy()
-    tensor_bytes = tensor.tobytes()
-    if compression == 'gzip':
-        compressed = gzip.compress(tensor_bytes)
-    else:
-        compressed = tensor_bytes
-    encoded = base64.b64encode(compressed).decode('utf-8')
-    return {
-        'data': encoded,
-        'shape': tensor.shape,
-        'dtype': str(tensor.dtype),
-        'compression': compression
-    }
+# def tensor_to_json_compressed(tensor, compression='gzip'):
+#     """将tensor压缩后转为JSON友好格式"""
+#     if isinstance(tensor, torch.Tensor):
+#         tensor = tensor.cpu().numpy()
+#     tensor_bytes = tensor.tobytes()
+#     if compression == 'gzip':
+#         compressed = gzip.compress(tensor_bytes)
+#     else:
+#         compressed = tensor_bytes
+#     encoded = base64.b64encode(compressed).decode('utf-8')
+#     return {
+#         'data': encoded,
+#         'shape': tensor.shape,
+#         'dtype': str(tensor.dtype),
+#         'compression': compression
+#     }
 
 class Processor(BaseProcessor):
     def __init__(self, config_file: str):
@@ -75,9 +76,19 @@ class Processor(BaseProcessor):
             # NOTE: 解析请求参数获取推理所需参数
             with MonitorTimer("decode"):
                 # 获取实际的请求数据 - 客户端发送的是嵌套结构
-                request_data = req_params.data
-                data = request_data.get("data", request_data)  # 兼容两种格式
-
+                # try:
+                #     raw_request_bytes = req_params.data
+                #     payload_dict = orjson.loads(raw_request_bytes)
+                # except Exception as e:
+                #     res_params.err_num = exceptions.NUM_ILLEGAL_ARGS
+                #     res_params.err_msg = f"Invalid request data: {str(e)}"
+                #     return
+                # # data = request_data.get("data", request_data)  # 兼容两种格式
+                data = req_params.data
+                if not isinstance(data, dict):
+                    res_params.err_num = exceptions.NUM_ILLEGAL_ARGS
+                    res_params.err_msg = f"Request field 'data' must be a dictionary. Found: {type(data).__name__}"
+                    return
                 # 检查必需参数
                 if data.get("chunk_faces") is None or data.get("chunk_whisper_features") is None:
                     res_params.err_num = exceptions.NUM_ILLEGAL_ARGS
@@ -87,12 +98,12 @@ class Processor(BaseProcessor):
                 chunk_faces = data["chunk_faces"]
                 chunk_whisper_features = data["chunk_whisper_features"]
                 
-                # 自动解压 chunk_faces
-                if isinstance(chunk_faces, dict) and 'data' in chunk_faces:
-                    chunk_faces = json_to_tensor_decompressed(chunk_faces)
-                # 自动解压 chunk_whisper_features
-                if isinstance(chunk_whisper_features, list) and len(chunk_whisper_features) > 0 and isinstance(chunk_whisper_features[0], dict) and 'data' in chunk_whisper_features[0]:
-                    chunk_whisper_features = [json_to_tensor_decompressed(w) for w in chunk_whisper_features]
+                # # 自动解压 chunk_faces
+                # if isinstance(chunk_faces, dict) and 'data' in chunk_faces:
+                #     chunk_faces = json_to_tensor_decompressed(chunk_faces)
+                # # 自动解压 chunk_whisper_features
+                # if isinstance(chunk_whisper_features, list) and len(chunk_whisper_features) > 0 and isinstance(chunk_whisper_features[0], dict) and 'data' in chunk_whisper_features[0]:
+                #     chunk_whisper_features = [json_to_tensor_decompressed(w) for w in chunk_whisper_features]
 
                 # 获取推理参数（可选，有默认值）
                 num_frames = data.get("num_frames", 16)
@@ -164,40 +175,42 @@ class Processor(BaseProcessor):
                         height=height,
                         width=width
                     )
-                    
-                    inference_time = time.time() - inference_start
-                    logger.info(f"Model inference completed in {inference_time:.3f}s")
-                    
-                    # 将结果转换为可序列化的格式
-                    # 注意：decoded_latents是torch.Tensor，需要转换为numpy数组
-                    serialize_start = time.time()
-                    frame_np = decoded_latents.cpu().numpy()
-                    # 原始未压缩大小
-                    uncompressed_bytes = frame_np.nbytes
-                    # 压缩
-                    serializable_frame = tensor_to_json_compressed(frame_np, compression='gzip')
-                    compressed_bytes = len(serializable_frame['data'])
-                    serialize_time = time.time() - serialize_start
-                    logger.info(f"Result serialization completed in {serialize_time:.3f}s")
-                    if debug:
-                        logger.info(f"[DEBUG] Response uncompressed size: {uncompressed_bytes/1024/1024:.2f} MB, compressed size: {compressed_bytes/1024/1024:.2f} MB")
-                    
                 except Exception as e:
                     logger.error(f"Video inference failed: {str(e)}")
                     res_params.err_num = exceptions.NUM_BACKEND_ERROR
                     res_params.err_msg = f"Video inference error: {str(e)}"
                     return
+                inference_time = time.time() - inference_start
+                logger.info(f"Model inference completed in {inference_time:.3f}s")                
 
-            # 设置返回结果
-            res_params.result = {
-                "decoded_latents": serializable_frame,
-                "num_frames": num_frames,
-                "num_inference_steps": num_inference_steps,
-                "guidance_scale": guidance_scale,
-                "height": height,
-                "width": width,
-                "debug": debug
-            }
+            with MonitorTimer("encoder"):
+                # 将结果转换为可序列化的格式
+                # 注意：decoded_latents是torch.Tensor，需要转换为numpy数组
+                serialize_start = time.time()
+                frame_np = decoded_latents.cpu().numpy()
+    
+                # 设置返回结果
+                result_data = {
+                    "decoded_latents": frame_np,
+                    "num_frames": num_frames,
+                    "num_inference_steps": num_inference_steps,
+                    "guidance_scale": guidance_scale,
+                    "height": height,
+                    "width": width,
+                    "debug": debug
+                }
+                final_payload_bytes = orjson.dumps(result_data, option=orjson.OPT_SERIALIZE_NUMPY)
+                serialize_time = time.time() - serialize_start
+                logger.info(f"Result serialization with orjson completed in {serialize_time:.3f}s")
+                
+                # 4. 调试和日志记录
+                if debug:
+                    uncompressed_bytes = frame_np.nbytes
+                    compressed_bytes = len(final_payload_bytes) # 整个 payload 的大小
+                    logger.info(f"[DEBUG] Original numpy array size: {uncompressed_bytes/1024/1024:.2f} MB")
+                    logger.info(f"[DEBUG] Total orjson payload size: {compressed_bytes/1024/1024:.2f} MB")
+
+            res_params.result = final_payload_bytes
 
             return
 
@@ -259,7 +272,7 @@ logger.info(f"[CONFIG] Found {len(config_files)} config file(s): {config_files}"
 config_file = config_files[0]
 logger.info(f"[CONFIG] Using config file: {config_file}")
 
-# NOTE: Flask的应用程序入口方式
+# # NOTE: Flask的应用程序入口方式
 logger.info(f"[SERVER] Initializing Video Generation Processor with config: {config_file}")
 server.register(Processor(config_file=config_file), ReqParams, ResParams)
 app = server.app
