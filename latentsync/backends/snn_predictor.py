@@ -237,7 +237,7 @@ class SNNPredictor(object):
             synced_video_frames.append(decoded_latents)
             
             chunk_time = time.time() - chunk_start_time
-            logger.info(f"Chunk {chunk_idx+1}/{preprocess_data['num_inferences']} completed in {chunk_time:.3f}s")
+            logger.info(f"\nChunk {chunk_idx+1}/{preprocess_data['num_inferences']} completed in {chunk_time:.3f}s")
         
         return synced_video_frames
 

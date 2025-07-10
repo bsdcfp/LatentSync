@@ -98,7 +98,7 @@ export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
 
 # 模型路径
 WEIGHTS_DIR="$AUXILIARY_DIR/weights/latentsync"
-VAE_WEIGHTS_DIR="/model_zoo/sd-vae-ft-mse/"
+VAE_WEIGHTS_DIR="$AUXILIARY_DIR/stabilityai/sd-vae-ft-mse/"
 TEMPLATE_DIR="$AUXILIARY_DIR/0612_online_templete_female_32fps_resize_720_1560"
 
 # 检查关键文件
@@ -155,8 +155,8 @@ PYTHON_CMD="python $SCRIPT_DIR/scripts/inference_online_0701.py \\
     --seed $SEED \\
     --log_file $LOG_FILE \\
     --first_step_offset 1 \\
-    --last_step_offset 4" 
-    #--debug_pipeline"
+    --last_step_offset 4  \\
+    --debug_pipeline"
 
 # 如果启用缓存，添加--enable_diycache参数
 if [ "$ENABLE_CACHE" = "true" ]; then
