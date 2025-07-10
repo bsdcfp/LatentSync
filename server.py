@@ -82,80 +82,80 @@ def register(_worker: WorkerType,
 def process():
     with monitor.IN_PROGRESS_TRACKER:
         res_params = app.res_params()
+        with monitor.MonitorTimer("total"):
+            try:
+                with monitor.MonitorTimer("getdata"):
+                    get_data = request.data
+                    logger.add_notice("datasize", len(get_data))
 
-        try:
-            with monitor.MonitorTimer("getdata"):
-                get_data = request.data
-                logger.add_notice("datasize", len(get_data))
-
-            with monitor.MonitorTimer("datadecode"):
-                # req_params = app.req_params(**json.loads(get_data.decode()))
-                # 智能解析：优先尝试 orjson，失败则回退到标准 json
-                try:
-                    # 1. 尝试用 orjson 直接解析 bytes。
-                    #    这是最高性能的路径，专门为你发送 Numpy 数组的客户端准备。
-                    payload_dict = orjson.loads(get_data)
-                except orjson.JSONDecodeError:
-                    # 2. 如果 orjson 失败（比如收到了一个不含特殊类型的标准JSON字符串），
-                    #    则回退到标准库的 json.loads。
-                    #    我们先将 bytes 解码为 utf-8 字符串，这是 json.loads 所需的。
+                with monitor.MonitorTimer("datadecode"):
+                    # req_params = app.req_params(**json.loads(get_data.decode()))
+                    # 智能解析：优先尝试 orjson，失败则回退到标准 json
                     try:
-                        payload_dict = json.loads(get_data.decode('utf-8'))
-                    except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                        # 3. 如果两种方式都失败了，说明请求体格式确实有问题。
-                        #    这里可以记录一个更明确的日志。
-                        logger.error(f"Failed to decode request body with both orjson and standard json. Error: {e}")
-                        # 抛出异常，让外层的 try...except 块去处理标准错误响应。
-                        raise exceptions.AppException(
-                            exceptions.NUM_DECODE_ERROR, 
-                            "Request body is not valid JSON or orjson."
-                        )
-                
-                # 无论哪种方式成功，都用得到的 payload_dict 创建 Pydantic 模型
-                req_params = app.req_params(**payload_dict)
+                        # 1. 尝试用 orjson 直接解析 bytes。
+                        #    这是最高性能的路径，专门为你发送 Numpy 数组的客户端准备。
+                        payload_dict = orjson.loads(get_data)
+                    except orjson.JSONDecodeError:
+                        # 2. 如果 orjson 失败（比如收到了一个不含特殊类型的标准JSON字符串），
+                        #    则回退到标准库的 json.loads。
+                        #    我们先将 bytes 解码为 utf-8 字符串，这是 json.loads 所需的。
+                        try:
+                            payload_dict = json.loads(get_data.decode('utf-8'))
+                        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                            # 3. 如果两种方式都失败了，说明请求体格式确实有问题。
+                            #    这里可以记录一个更明确的日志。
+                            logger.error(f"Failed to decode request body with both orjson and standard json. Error: {e}")
+                            # 抛出异常，让外层的 try...except 块去处理标准错误响应。
+                            raise exceptions.AppException(
+                                exceptions.NUM_DECODE_ERROR, 
+                                "Request body is not valid JSON or orjson."
+                            )
+                    
+                    # 无论哪种方式成功，都用得到的 payload_dict 创建 Pydantic 模型
+                    req_params = app.req_params(**payload_dict)
 
-            if hasattr(req_params, "appid"):
-                monitor.NUM_REQUESTS.labels(appid=req_params.appid,
+                if hasattr(req_params, "appid"):
+                    monitor.NUM_REQUESTS.labels(appid=req_params.appid,
+                                                mpid=monitor.PID).inc()
+
+                with monitor.MonitorTimer("worker"):
+                    app.worker(req_params, res_params)  # type: ignore
+            except json.decoder.JSONDecodeError as err:
+                logger.error(err)
+                res_params.err_num = exceptions.NUM_DECODE_ERROR
+                res_params.err_msg = exceptions.desc_of_num(
+                    exceptions.NUM_DECODE_ERROR)
+            except ValidationError as err:
+                logger.error(err.errors())
+                res_params.err_num = exceptions.NUM_ILLEGAL_ARGS
+                res_params.err_msg = json.dumps(err.errors())
+            except exceptions.AppException as err:
+                logger.error(err.reason)
+                res_params.err_num, res_params.err_msg = err.num, err.reason
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.exception(exc)
+                res_params.err_num = exceptions.NUM_UNKNOWN
+                res_params.err_msg = str(exc)
+
+            try:
+                res_json = res_params.model_dump_json()
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.exception(exc)
+                res_params = app.res_params()
+                res_params.err_num = exceptions.NUM_INIT_ERROR
+                res_params.err_msg = str(exc)
+                res_json = res_params.model_dump_json()
+            finally:
+                logger.add_notice("err_num", res_params.err_num)
+                logger.add_notice("err_msg", res_params.err_msg)
+                logger.flush()
+
+            if res_params.err_num != 0:
+                monitor.INTERVAL_STATUS.labels(err_num=str(res_params.err_num),
+                                            err_msg=res_params.err_msg,
                                             mpid=monitor.PID).inc()
 
-            with monitor.MonitorTimer("total"):
-                app.worker(req_params, res_params)  # type: ignore
-        except json.decoder.JSONDecodeError as err:
-            logger.error(err)
-            res_params.err_num = exceptions.NUM_DECODE_ERROR
-            res_params.err_msg = exceptions.desc_of_num(
-                exceptions.NUM_DECODE_ERROR)
-        except ValidationError as err:
-            logger.error(err.errors())
-            res_params.err_num = exceptions.NUM_ILLEGAL_ARGS
-            res_params.err_msg = json.dumps(err.errors())
-        except exceptions.AppException as err:
-            logger.error(err.reason)
-            res_params.err_num, res_params.err_msg = err.num, err.reason
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.exception(exc)
-            res_params.err_num = exceptions.NUM_UNKNOWN
-            res_params.err_msg = str(exc)
-
-        try:
-            res_json = res_params.model_dump_json()
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.exception(exc)
-            res_params = app.res_params()
-            res_params.err_num = exceptions.NUM_INIT_ERROR
-            res_params.err_msg = str(exc)
-            res_json = res_params.model_dump_json()
-        finally:
-            logger.add_notice("err_num", res_params.err_num)
-            logger.add_notice("err_msg", res_params.err_msg)
-            logger.flush()
-
-        if res_params.err_num != 0:
-            monitor.INTERVAL_STATUS.labels(err_num=str(res_params.err_num),
-                                           err_msg=res_params.err_msg,
-                                           mpid=monitor.PID).inc()
-
-        return res_json
+            return res_json
 
 
 @app.route("/api/stream_process", methods=["POST"])
