@@ -242,9 +242,9 @@ class SNNTorchBackend(BaseBackend):
                 self.vae.__class__.verbose = getattr(self.config, 'verbose', False)
                 self.vae.__class__.backend = 'torch'
 
-                self.vae.__class__.decode_latents = decode_latents
-                self.vae.__class__.prepare_mask_latents = prepare_mask_latents
-                self.vae.__class__.prepare_image_latents = prepare_image_latents
+                # self.vae.__class__.decode_latents = decode_latents
+                # self.vae.__class__.prepare_mask_latents = prepare_mask_latents
+                # self.vae.__class__.prepare_image_latents = prepare_image_latents
 
                 # Only support batch size 1 for now
                 batch_size = 1
