@@ -44,6 +44,7 @@ wandb/
 # log files
 *.log
 *.txt
+!envs/*.txt
 *.lprof
 models/temp_config.yaml
 *.pid
