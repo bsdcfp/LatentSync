@@ -53,7 +53,6 @@ dependencies = [
     "mediapipe>=0.10.0",
     "omegaconf>=2.3.0",
     "matplotlib>=3.8.0",
-    "opencv-contrib-python>=4.5.0",
     "ffmpeg-python>=0.2.0",
     "ffmpy>=0.5.0",
     "librosa>=0.10.0",
@@ -81,7 +80,6 @@ tensorrt = [
     "tensorrt>=8.0.0",
     "polygraphy>=0.47.0",
     "cuda-python>=12.0.0",
-    "opencv-python>=4.5.0",
 ]
 all = [
     "pytest>=6.0",
