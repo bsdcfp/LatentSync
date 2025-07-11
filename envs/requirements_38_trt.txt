@@ -1,0 +1,8 @@
+cuda-python
+polygraphy
+flash-attn==2.7.0.post2 
+diffusers>=0.34.0
+tensorrt==8.6.1
+onnx_graphsurgeon>=0.5.2
+onnxsim==0.4.3
+onnxruntime==1.19.0
