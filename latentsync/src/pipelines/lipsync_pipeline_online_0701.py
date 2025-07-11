@@ -188,7 +188,10 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
     def decode_latents(self, latents):
         latents = latents / self.vae.config.scaling_factor + self.vae.config.shift_factor
         latents = rearrange(latents, "b c f h w -> (b f) c h w")
+        decode_start_time = time.time()
         decoded_latents = self.vae.decode(latents).sample
+        decode_end_time = time.time()
+        print(f"decode_latents time: {(decode_end_time - decode_start_time)*1000} ms")
         return decoded_latents
 
     def prepare_extra_step_kwargs(self, generator, eta):
@@ -252,7 +255,10 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
         masked_image = masked_image.to(device=device, dtype=dtype)
 
         # encode the mask image into latents space so we can concatenate it to the latents
+        encode_start_time = time.time()
         masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
+        encode_end_time = time.time()
+        print(f"prepare_mask_latents time: {(encode_end_time - encode_start_time)*1000} ms")
         masked_image_latents = (masked_image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
 
         # aligning device to prevent device errors when concating it with the latent model input
@@ -272,7 +278,10 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
     @NVTXContext
     def prepare_image_latents(self, images, device, dtype, generator, do_classifier_free_guidance):
         images = images.to(device=device, dtype=dtype)
+        encode_start_time = time.time()
         image_latents = self.vae.encode(images).latent_dist.sample(generator=generator)
+        encode_end_time = time.time()
+        print(f"encode_image_latents time: {(encode_end_time - encode_start_time)*1000} ms")
         image_latents = (image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
         image_latents = rearrange(image_latents, "f c h w -> 1 c f h w")
         image_latents = torch.cat([image_latents] * 2) if do_classifier_free_guidance else image_latents
