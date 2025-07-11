@@ -383,7 +383,7 @@ def prepare_mask_latents(
         ############################### BACKEND #################################
 
         # encode the mask image into latents space so we can concatenate it to the latents
-        masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
+        # masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
         masked_image_latents = (masked_image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
 
         # aligning device to prevent device errors when concating it with the latent model input
