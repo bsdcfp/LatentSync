@@ -188,10 +188,13 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
     def decode_latents(self, latents):
         latents = latents / self.vae.config.scaling_factor + self.vae.config.shift_factor
         latents = rearrange(latents, "b c f h w -> (b f) c h w")
-        decode_start_time = time.time()
+        decode_start_time = torch.cuda.Event(enable_timing=True)
+        decode_end_time = torch.cuda.Event(enable_timing=True)
+        decode_start_time.record()
         decoded_latents = self.vae.decode(latents).sample
-        decode_end_time = time.time()
-        print(f"decode_latents time: {(decode_end_time - decode_start_time)*1000} ms")
+        decode_end_time.record()
+        torch.cuda.synchronize()
+        print(f"decode_latents time: {decode_start_time.elapsed_time(decode_end_time)} ms")
         return decoded_latents
 
     def prepare_extra_step_kwargs(self, generator, eta):
@@ -255,10 +258,13 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
         masked_image = masked_image.to(device=device, dtype=dtype)
 
         # encode the mask image into latents space so we can concatenate it to the latents
-        encode_start_time = time.time()
+        encode_start_time = torch.cuda.Event(enable_timing=True)
+        encode_end_time = torch.cuda.Event(enable_timing=True)
+        encode_start_time.record()
         masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
-        encode_end_time = time.time()
-        print(f"prepare_mask_latents time: {(encode_end_time - encode_start_time)*1000} ms")
+        encode_end_time.record()
+        torch.cuda.synchronize()
+        print(f"prepare_mask_latents time: {encode_start_time.elapsed_time(encode_end_time)} ms")
         masked_image_latents = (masked_image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
 
         # aligning device to prevent device errors when concating it with the latent model input
@@ -278,10 +284,13 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
     @NVTXContext
     def prepare_image_latents(self, images, device, dtype, generator, do_classifier_free_guidance):
         images = images.to(device=device, dtype=dtype)
-        encode_start_time = time.time()
+        encode_start_time = torch.cuda.Event(enable_timing=True)
+        encode_end_time = torch.cuda.Event(enable_timing=True)
+        encode_start_time.record()
         image_latents = self.vae.encode(images).latent_dist.sample(generator=generator)
-        encode_end_time = time.time()
-        print(f"encode_image_latents time: {(encode_end_time - encode_start_time)*1000} ms")
+        encode_end_time.record()
+        torch.cuda.synchronize()
+        print(f"prepare_image_latents time: {encode_start_time.elapsed_time(encode_end_time)} ms")
         image_latents = (image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
         image_latents = rearrange(image_latents, "f c h w -> 1 c f h w")
         image_latents = torch.cat([image_latents] * 2) if do_classifier_free_guidance else image_latents
@@ -788,7 +797,9 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
                 
                 # 预测噪声
                 if debug:
-                    unet_start_time = time.time()
+                    unet_start_time = torch.cuda.Event(enable_timing=True)
+                    unet_end_time = torch.cuda.Event(enable_timing=True)
+                    unet_start_time.record()
                 
                 # 在轻量级模式下，UNet为None，不能进行推理
                 if self.lightweight_mode:
@@ -797,7 +808,10 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
                 noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=audio_embeds).sample
                 
                 if debug:
-                    unet_time = time.time() - unet_start_time
+                    unet_end_time.record()
+                    torch.cuda.synchronize()
+                    unet_time = unet_start_time.elapsed_time(unet_end_time)
+                    print(f"unet time: {unet_time} ms")
                     total_unet_time += unet_time
 
                 # 执行guidance
@@ -817,7 +831,7 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
         if debug:
             denoising_total_time = time.time() - denoising_start_time
             avg_unet_time = total_unet_time / num_inference_steps
-            print(f"Chunk: 去噪耗时={denoising_total_time:.3f}s, 平均UNet推理耗时={avg_unet_time:.3f}s")
+            print(f"Chunk: 去噪耗时={denoising_total_time:.3f}s, 平均UNet推理耗时={avg_unet_time:.3f}ms")
 
         # 解码latents
         decoded_latents = self.decode_latents(latents)
