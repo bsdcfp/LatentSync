@@ -188,13 +188,30 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
     def decode_latents(self, latents):
         latents = latents / self.vae.config.scaling_factor + self.vae.config.shift_factor
         latents = rearrange(latents, "b c f h w -> (b f) c h w")
-        decode_start_time = torch.cuda.Event(enable_timing=True)
-        decode_end_time = torch.cuda.Event(enable_timing=True)
-        decode_start_time.record()
-        decoded_latents = self.vae.decode(latents).sample
-        decode_end_time.record()
-        torch.cuda.synchronize()
-        print(f"decode_latents time: {decode_start_time.elapsed_time(decode_end_time)} ms")
+        # decoded_latents = self.vae.decode(latents).sample
+        ############################### BACKEND #################################
+        if self.vae.verbose:
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
+        if self.vae.backend == 'trt' and 'vae_decode' in self.vae.trt_executor.stages:
+            feed_dict = {
+                "latents": latents,
+            }
+
+            decoded_latents =  self.vae.trt_executor.runEngine('vae_decode', feed_dict)['output']
+            real_backend = 'trt'
+        elif self.vae.backend == 'torch':
+            decoded_latents = self.vae.decode(latents).sample
+            real_backend = 'torch'
+        else:
+            decoded_latents = self.vae.decode(latents).sample
+            real_backend = 'torch'
+        if self.vae.verbose:
+            end.record()
+            torch.cuda.synchronize()
+            print("[INFO] vae decode", real_backend, "execution time {:.2f}".format(start.elapsed_time(end)), "ms")
+        ############################### BACKEND #################################
         return decoded_latents
 
     def prepare_extra_step_kwargs(self, generator, eta):
@@ -256,15 +273,31 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
             mask, size=(height // self.vae_scale_factor, width // self.vae_scale_factor)
         )
         masked_image = masked_image.to(device=device, dtype=dtype)
+        ############################### BACKEND #################################
+        if self.vae.verbose:
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
+        if self.vae.backend == 'trt' and 'vae_decode' in self.vae.trt_executor.stages:
+            feed_dict = {
+                "latents": masked_image,
+            }
+            masked_image_latents =  self.vae.trt_executor.runEngine('vae_encode', feed_dict)['output'].to(torch.float16)
+            real_backend = 'trt'
+        elif self.vae.backend == 'torch':
+            masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
+            real_backend = 'torch'
+        else:
+            masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
+            real_backend = 'torch'
+        if self.vae.verbose:
+            end.record()
+            torch.cuda.synchronize()
+            print("[INFO] vae encode mask", real_backend, "execution time {:.2f}".format(start.elapsed_time(end)), "ms")
+        ############################### BACKEND #################################
 
         # encode the mask image into latents space so we can concatenate it to the latents
-        encode_start_time = torch.cuda.Event(enable_timing=True)
-        encode_end_time = torch.cuda.Event(enable_timing=True)
-        encode_start_time.record()
-        masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
-        encode_end_time.record()
-        torch.cuda.synchronize()
-        print(f"prepare_mask_latents time: {encode_start_time.elapsed_time(encode_end_time)} ms")
+        # masked_image_latents = self.vae.encode(masked_image).latent_dist.sample(generator=generator)
         masked_image_latents = (masked_image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
 
         # aligning device to prevent device errors when concating it with the latent model input
@@ -284,13 +317,30 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
     @NVTXContext
     def prepare_image_latents(self, images, device, dtype, generator, do_classifier_free_guidance):
         images = images.to(device=device, dtype=dtype)
-        encode_start_time = torch.cuda.Event(enable_timing=True)
-        encode_end_time = torch.cuda.Event(enable_timing=True)
-        encode_start_time.record()
-        image_latents = self.vae.encode(images).latent_dist.sample(generator=generator)
-        encode_end_time.record()
-        torch.cuda.synchronize()
-        print(f"prepare_image_latents time: {encode_start_time.elapsed_time(encode_end_time)} ms")
+        # image_latents = self.vae.encode(images).latent_dist.sample(generator=generator)
+        ############################### BACKEND #################################
+        if self.vae.verbose:
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+            start.record()
+        if self.vae.backend == 'trt' and 'vae_decode' in self.vae.trt_executor.stages:
+            feed_dict = {
+                "latents": images,
+            }
+            image_latents =  self.vae.trt_executor.runEngine('vae_encode', feed_dict)['output'].to(torch.float16)
+            real_backend = 'trt'
+        elif self.vae.backend == 'torch':
+            image_latents = self.vae.encode(images).latent_dist.sample(generator=generator)
+            real_backend = 'torch'
+        else:
+            image_latents = self.vae.encode(images).latent_dist.sample(generator=generator)
+            real_backend = 'torch'
+        if self.vae.verbose:
+            end.record()
+            torch.cuda.synchronize()
+
+            print("[INFO] vae encode image", real_backend, "execution time {:.2f}".format(start.elapsed_time(end)), "ms")
+        ############################### BACKEND #################################
         image_latents = (image_latents - self.vae.config.shift_factor) * self.vae.config.scaling_factor
         image_latents = rearrange(image_latents, "f c h w -> 1 c f h w")
         image_latents = torch.cat([image_latents] * 2) if do_classifier_free_guidance else image_latents
@@ -811,7 +861,7 @@ class LipsyncPipeline_online_0701(DiffusionPipeline):
                     unet_end_time.record()
                     torch.cuda.synchronize()
                     unet_time = unet_start_time.elapsed_time(unet_end_time)
-                    print(f"unet time: {unet_time} ms")
+                    # print(f"unet time: {unet_time} ms")
                     total_unet_time += unet_time
 
                 # 执行guidance
