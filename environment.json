@@ -1,0 +1,13 @@
+{
+    "run_commands": [
+        "apt update",
+        "apt install ffmpeg -y",
+        
+        "pip install --user -r envs/requirements_38.txt",
+        "pip uninstall -r envs/uninstall_requirements.txt -y",
+        "pip install --user opencv-python-headless==4.5.4.58",
+        "pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple flash-attn==2.7.0.post2",
+        "pip install --no-cache-dir --trusted-host pypi.shopee.io -i http://pypi.shopee.io/simple/ aip-oneservice==0.4.9"
+    ],
+    "triton_version": "0.2.8"
+}

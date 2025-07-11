@@ -1,0 +1,6 @@
+- 
+    name: connectivity_test
+    desc: "Connectivity Testing"
+    request:
+        body_type: "default"
+    validate: []

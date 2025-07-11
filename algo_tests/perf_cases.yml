@@ -1,0 +1,14 @@
+# - 
+#     name: multimodal_perf_case
+#     desc: "video perf test"
+#     request:
+#         variables:
+#             - 
+#                 "key": "video_list[0].image_url_list"
+#                 "value": "${image_url_list}"
+#         body_type: "default" 
+
+
+
+
+

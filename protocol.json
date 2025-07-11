@@ -1,0 +1,15 @@
+{
+     "request": {
+          "audio_list": [
+               {
+                    "audio_data": "/home/work/houyi/latentsync_online_simple_auxilary/input_example/beauty_v2_20s.MP3",
+                    "extra_info": ""
+               }
+          ],
+          "extra_info": ""
+     },
+     "response": {
+          "code": 0,
+          "extra_info": "{\"video_url\": \"https://down-sp-sg.vod.susercontent.com/api/v4/11110212/mms/sg-11110212-6kiq8-xxx.mp4\", \"mask_url\": \"https://down-sp-sg.vod.susercontent.com/api/v4/11110212/mms/sg-11110212-6kipj-xxx.mp4\", \"video_vid\": \"sg-11110212-6kiq8-xxx\", \"mask_vid\": \"sg-11110212-6kipj-xxx\", \"generated_frames\": 512, \"processing_time\": 28.86, \"content_type\": \"url\"}"
+     }
+}

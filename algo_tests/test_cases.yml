@@ -1,0 +1,11 @@
+-
+    name: test_single_data
+    desc: "test_single_data"
+    request:
+        variables:
+            -
+                "key": "audio_list[0].audio_data"
+                "value": "/home/work/houyi/latentsync_online_simple_auxilary/input_example/beauty_v2_20s.MP3"
+
+    validate:
+        - eq: ["code", 0]

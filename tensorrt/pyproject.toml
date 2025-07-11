@@ -1,0 +1,170 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shopee-aip-trt-latentsync"
+dynamic = ["version"]
+description = "Optimized Avatar Application LatentSync Service"
+readme = "README.md"
+license = {text = "Apache 2.0"}
+authors = [
+    {name = "AIP DeepLearning Team", email = "fuping.chun@shopee.com"}
+]
+maintainers = [
+    {name = "AIP DeepLearning Team", email = "fuping.chun@shopee.com"}
+]
+keywords = ["DeepLearning", "Diffusion", "Pytorch", "Stable Diffusion", "LatentSync"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "torch>=2.2.0",
+    "accelerate>=0.26.0",
+    "opencv-python-headless>=4.5.0",
+    "transformers>=4.45.0",
+    "diffusers>=0.34.0",
+    "numpy>=1.24.0",
+    "pillow>=8.0.0",
+    "safetensors>=0.4.0",
+    "huggingface-hub>=0.33.0",
+    "psutil>=5.8.0",
+    "packaging>=20.0",
+    "pyyaml>=6.0",
+    "einops>=0.7.0",
+    "cuda-python>=12.0.0",
+    "polygraphy>=0.47.0",
+    "pandas>=1.5.0",
+    "pynvml>=11.0.0",
+    "onnx>=1.15.0",
+    "protobuf>=3.20.0,<4.0.0",
+    "mediapipe>=0.10.0",
+    "omegaconf>=2.3.0",
+    "matplotlib>=3.8.0",
+    "ffmpeg-python>=0.2.0",
+    "ffmpy>=0.5.0",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+    "sounddevice>=0.5.0",
+    "face-alignment>=1.4.0",
+    "deepcache>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=22.0",
+    "isort>=5.0",
+    "flake8>=3.8",
+    "mypy>=0.900",
+]
+shopee = [
+    "aip-oneservice>=0.4.9",
+    "mms-sdk>=1.0.30",
+    "shopee-onemonitor>=0.1.0",
+]
+tensorrt = [
+    "tensorrt>=8.0.0",
+    "polygraphy>=0.47.0",
+    "cuda-python>=12.0.0",
+]
+all = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+    "black>=22.0",
+    "isort>=5.0",
+    "flake8>=3.8",
+    "mypy>=0.900",
+    "aip-oneservice>=0.4.9",
+    "mms-sdk>=1.0.30",
+    "shopee-onemonitor>=0.1.0",
+    "tensorrt>=8.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/shopee/trt_latentsync"
+Documentation = "https://github.com/shopee/trt_latentsync#readme"
+Repository = "https://github.com/shopee/trt_latentsync.git"
+"Bug Tracker" = "https://github.com/shopee/trt_latentsync/issues"
+
+[tool.setuptools.packages.find]
+include = ["trt_latentsync*"]
+
+[tool.setuptools_scm]
+write_to = "trt_latentsync/_version.py"
+fallback_version = "1.6.0"
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | output
+  | tmp_results
+  | log
+  | models
+  | examples
+  | test
+  | scripts
+  | upload_tool
+  | build_env
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known-first-party = ["trt_latentsync"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "torch.*",
+    "diffusers.*",
+    "transformers.*",
+    "accelerate.*",
+    "onnx.*",
+    "onnxruntime.*",
+    "polygraphy.*",
+    "opencv.*",
+    "cv2.*",
+]
+ignore_missing_imports = true 
